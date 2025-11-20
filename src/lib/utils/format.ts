@@ -3,6 +3,11 @@ import { da } from 'date-fns/locale'
 
 export function formatDate(date: string | Date, formatStr: string = 'PPP') {
   const dateObj = typeof date === 'string' ? parseISO(date) : date
+  
+  if (formatStr === 'relative') {
+    return formatDistanceToNow(dateObj, { addSuffix: true, locale: da })
+  }
+  
   return format(dateObj, formatStr, { locale: da })
 }
 

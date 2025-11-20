@@ -1,0 +1,168 @@
+{
+  "$id": "eforms-notice",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "eForms Notice Schema",
+  "description": "Minimal eForms JSON shape (notice, lots, procedure, orgs, criteria)",
+  "type": "object",
+  "required": ["noticeType", "procedure", "buyer", "lots", "cpv", "title"],
+  "properties": {
+    "noticeType": {
+      "enum": ["F02", "F03", "F14", "eForms"],
+      "description": "Type of notice (F02=Contract Notice, F03=Contract Award, F14=Qualification System)"
+    },
+    "title": {
+      "type": "string",
+      "description": "Title of the notice"
+    },
+    "description": {
+      "type": "string",
+      "description": "Description of the notice"
+    },
+    "cpv": {
+      "type": "array",
+      "description": "CPV codes for the notice",
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9]{8}(-[0-9])?$"
+      },
+      "minItems": 1
+    },
+    "buyer": {
+      "type": "object",
+      "required": ["name", "identifier"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Buyer organization name"
+        },
+        "identifier": {
+          "type": "string",
+          "description": "Buyer organization identifier"
+        },
+        "country": {
+          "type": "string",
+          "default": "DK",
+          "description": "Buyer country code"
+        }
+      },
+      "additionalProperties": false
+    },
+    "procedure": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "enum": ["open", "restricted", "negotiated", "qualification"],
+          "description": "Type of procurement procedure"
+        },
+        "minInvite": {
+          "type": "number",
+          "minimum": 1,
+          "description": "Minimum number of suppliers to invite"
+        },
+        "maxInvite": {
+          "type": "number",
+          "minimum": 1,
+          "description": "Maximum number of suppliers to invite"
+        },
+        "justification": {
+          "type": "string",
+          "description": "Justification for negotiated procedure"
+        },
+        "initialOffers": {
+          "type": "boolean",
+          "description": "Whether initial offers are required"
+        }
+      },
+      "additionalProperties": false
+    },
+    "lots": {
+      "type": "array",
+      "description": "Lots for the notice",
+      "items": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for the lot"
+          },
+          "title": {
+            "type": "string",
+            "description": "Title of the lot"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the lot"
+          },
+          "valueEstimate": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Estimated value of the lot"
+          },
+          "duration": {
+            "type": "object",
+            "properties": {
+              "months": {
+                "type": "number",
+                "minimum": 1,
+                "description": "Duration in months"
+              },
+              "start": {
+                "type": "string",
+                "format": "date",
+                "description": "Start date"
+              },
+              "end": {
+                "type": "string",
+                "format": "date",
+                "description": "End date"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "deadlines": {
+      "type": "object",
+      "description": "Deadlines for the notice",
+      "properties": {
+        "application": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Application deadline"
+        },
+        "qaApplication": {
+          "type": "string",
+          "format": "date-time",
+          "description": "QA deadline for applications"
+        },
+        "tender": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Tender submission deadline"
+        },
+        "qaTender": {
+          "type": "string",
+          "format": "date-time",
+          "description": "QA deadline for tenders"
+        }
+      },
+      "additionalProperties": false
+    },
+    "accessIsFree": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether access to the notice is free"
+    },
+    "communication": {
+      "type": "string",
+      "default": "platform",
+      "description": "Communication channel"
+    }
+  },
+  "additionalProperties": false
+}

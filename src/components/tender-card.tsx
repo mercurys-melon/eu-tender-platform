@@ -1,129 +1,91 @@
 import Link from 'next/link'
-import { Calendar, DollarSign, Building, FileText, Clock } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { formatDate, formatCurrency } from '@/lib/utils/format'
+import { format } from 'date-fns'
+import { da } from 'date-fns/locale'
+
+interface Tender {
+  id: string
+  title: string
+  description: string
+  deadline: string
+  status: 'active' | 'pending' | 'closed'
+  category: string
+  budget?: string
+}
 
 interface TenderCardProps {
-  tender: {
-    id: string
-    title: string
-    description: string
-    entity_id: string
-    category: string
-    estimated_value: number
-    currency: string
-    submission_deadline: string
-    publication_date: string
-    status: 'draft' | 'published' | 'closed' | 'awarded'
-    espd_required: boolean
-    ted_published: boolean
-  }
-}
-
-const statusColors = {
-  draft: 'bg-gray-100 text-gray-800',
-  published: 'bg-green-100 text-green-800',
-  closed: 'bg-red-100 text-red-800',
-  awarded: 'bg-blue-100 text-blue-800',
-}
-
-const statusLabels = {
-  draft: 'Kladde',
-  published: 'Publiceret',
-  closed: 'Lukket',
-  awarded: 'Tildelt',
+  tender: Tender
 }
 
 export function TenderCard({ tender }: TenderCardProps) {
-  const isDeadlinePassed = new Date(tender.submission_deadline) < new Date()
-  const isRecentlyPublished = new Date(tender.publication_date) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active':
+        return 'status-active'
+      case 'pending':
+        return 'status-pending'
+      case 'closed':
+        return 'status-closed'
+      default:
+        return 'status-neutral'
+    }
+  }
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'active':
+        return 'Aktiv'
+      case 'pending':
+        return 'Afventer'
+      case 'closed':
+        return 'Lukket'
+      default:
+        return 'Ukendt'
+    }
+  }
 
   return (
-    <Card className="hover:shadow-lg transition-shadow duration-200">
-      <CardHeader>
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <CardTitle className="text-lg line-clamp-2 mb-2">
-              {tender.title}
-            </CardTitle>
-            <CardDescription className="line-clamp-3">
-              {tender.description}
-            </CardDescription>
-          </div>
-          <div className="flex flex-col items-end gap-2">
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[tender.status]}`}>
-              {statusLabels[tender.status]}
+    <Link href={`/tenders/${tender.id}`} className="block">
+      <div className="card-hover p-6 h-full">
+        <div className="flex justify-between items-start mb-4">
+          <span className="badge badge-primary">{tender.category}</span>
+          <span className={`badge ${getStatusColor(tender.status)}`}>
+            {getStatusText(tender.status)}
+          </span>
+        </div>
+        
+        <h3 className="text-h4 mb-3 line-clamp-2 hover:text-nordic-blue transition-colors">
+          {tender.title}
+        </h3>
+        
+        <p className="text-granite-grey text-small mb-4 line-clamp-3">
+          {tender.description}
+        </p>
+        
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-small">
+            <span className="text-slate-grey">Deadline:</span>
+            <span className="font-medium text-granite-grey">
+              {format(new Date(tender.deadline), 'dd. MMM yyyy', { locale: da })}
             </span>
-            {isRecentlyPublished && (
-              <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                Ny
-              </span>
-            )}
+          </div>
+          
+          {tender.budget && (
+            <div className="flex items-center justify-between text-small">
+              <span className="text-slate-grey">Budget:</span>
+              <span className="font-medium text-granite-grey">{tender.budget}</span>
+            </div>
+          )}
+        </div>
+        
+        <div className="mt-4 pt-4 border-t border-silver-mist">
+          <div className="flex items-center text-emerald-green text-small font-medium">
+            <span>Se detaljer</span>
+            <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
           </div>
         </div>
-      </CardHeader>
-
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div className="flex items-center gap-2">
-            <Building className="w-4 h-4 text-gray-500" />
-            <span className="text-gray-600">Enhed: {tender.entity_id}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <FileText className="w-4 h-4 text-gray-500" />
-            <span className="text-gray-600">Kategori: {tender.category}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <DollarSign className="w-4 h-4 text-gray-500" />
-            <span className="text-gray-600">
-              Værdi: {formatCurrency(tender.estimated_value, tender.currency)}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-gray-500" />
-            <span className="text-gray-600">
-              Deadline: {formatDate(tender.submission_deadline)}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between text-xs text-gray-500">
-          <div className="flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            <span>
-              {isDeadlinePassed ? 'Deadline overskredet' : `${formatDate(tender.submission_deadline, 'relative')} tilbage`}
-            </span>
-          </div>
-          <div className="flex gap-2">
-            {tender.espd_required && (
-              <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs">
-                ESPD
-              </span>
-            )}
-            {tender.ted_published && (
-              <span className="px-2 py-1 bg-green-50 text-green-700 rounded text-xs">
-                TED
-              </span>
-            )}
-          </div>
-        </div>
-      </CardContent>
-
-      <CardFooter className="flex justify-between">
-        <Button variant="outline" size="sm" asChild>
-          <Link href={`/tenders/${tender.id}`}>
-            Se Detaljer
-          </Link>
-        </Button>
-        {tender.status === 'published' && !isDeadlinePassed && (
-          <Button size="sm" asChild>
-            <Link href={`/tenders/${tender.id}/bid`}>
-              Byde Nu
-            </Link>
-          </Button>
-        )}
-      </CardFooter>
-    </Card>
+      </div>
+    </Link>
   )
 } 

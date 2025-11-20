@@ -1,0 +1,61 @@
+{
+  "$id": "espd-request",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ESPD Request Schema",
+  "description": "JSON shape for ESPD request (provider-neutral)",
+  "type": "object",
+  "required": ["title", "buyer", "criteria"],
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Title of the ESPD request"
+    },
+    "buyer": {
+      "type": "object",
+      "required": ["name", "identifier"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Buyer organization name"
+        },
+        "identifier": {
+          "type": "string",
+          "description": "Buyer organization identifier (CVR, VAT, etc.)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "preset": {
+      "enum": ["standardDK", "standardEU", "custom"],
+      "default": "standardDK",
+      "description": "ESPD exclusion grounds preset"
+    },
+    "criteria": {
+      "type": "array",
+      "description": "Selection criteria for the ESPD",
+      "items": {
+        "type": "object",
+        "required": ["type", "value"],
+        "properties": {
+          "type": {
+            "enum": ["economic", "technical", "experience", "other"],
+            "description": "Type of selection criterion"
+          },
+          "value": {
+            "type": "string",
+            "description": "Description of the criterion"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "specialConditions": {
+      "type": "array",
+      "description": "Special conditions for the ESPD",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

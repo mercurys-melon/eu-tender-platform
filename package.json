@@ -1,66 +1,64 @@
 {
   "name": "eu-tender-platform",
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "description": "EU Tender Platform - Digital tender management system",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "type-check": "tsc --noEmit",
-    "db:generate": "supabase gen types typescript --project-id your-project-id > src/types/supabase.ts",
-    "db:push": "supabase db push",
-    "db:reset": "supabase db reset"
+    "dev": "npx next dev",
+    "build": "npx next build",
+    "start": "npx next start",
+    "lint": "npx next lint",
+    "lint:fix": "npx next lint --fix",
+    "type-check": "npx tsc --noEmit",
+    "format": "npx prettier --write .",
+    "clean": "rm -rf .next dist"
   },
+  "keywords": [
+    "blockbid",
+    "tender",
+    "nextjs",
+    "typescript",
+    "eu-procurement",
+    "public-tendering",
+    "supabase"
+  ],
+  "author": "BlockBid",
+  "license": "MIT",
   "dependencies": {
-    "@hookform/resolvers": "^3.3.2",
-    "@radix-ui/react-accordion": "^1.1.2",
-    "@radix-ui/react-alert-dialog": "^1.0.5",
-    "@radix-ui/react-avatar": "^1.0.4",
-    "@radix-ui/react-checkbox": "^1.0.4",
-    "@radix-ui/react-dialog": "^1.0.5",
-    "@radix-ui/react-dropdown-menu": "^2.0.6",
-    "@radix-ui/react-label": "^2.0.2",
-    "@radix-ui/react-popover": "^1.0.7",
-    "@radix-ui/react-progress": "^1.0.3",
-    "@radix-ui/react-select": "^2.0.0",
-    "@radix-ui/react-separator": "^1.0.3",
-    "@radix-ui/react-slot": "^1.0.2",
-    "@radix-ui/react-switch": "^1.0.3",
-    "@radix-ui/react-tabs": "^1.0.4",
-    "@radix-ui/react-toast": "^1.1.5",
-    "@radix-ui/react-tooltip": "^1.0.7",
-    "@supabase/supabase-js": "^2.38.4",
-    "@tanstack/react-query": "^5.8.4",
-    "@tanstack/react-table": "^8.10.7",
-    "class-variance-authority": "^0.7.0",
+    "@supabase/auth-helpers-nextjs": "^0.8.7",
+    "@supabase/ssr": "^0.7.0",
+    "@supabase/supabase-js": "^2.38.0",
+    "autoprefixer": "^10.4.16",
     "clsx": "^2.0.0",
     "date-fns": "^2.30.0",
-    "lucide-react": "^0.294.0",
-    "next": "14.0.3",
-    "react": "^18",
-    "react-dom": "^18",
-    "react-hook-form": "^7.48.2",
-    "recharts": "^2.8.0",
+    "next": "^14.0.0",
+    "postcss": "^8.4.31",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
     "tailwind-merge": "^2.0.0",
-    "tailwindcss-animate": "^1.0.7",
-    "zod": "^3.22.4",
-    "zustand": "^4.4.7"
+    "tailwindcss": "^3.3.0",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "autoprefixer": "^10.0.1",
-    "eslint": "^8",
-    "eslint-config-next": "14.0.3",
-    "postcss": "^8",
-    "prettier": "^3.1.0",
-    "prettier-plugin-tailwindcss": "^0.5.7",
-    "tailwindcss": "^3.3.0",
-    "typescript": "^5"
+    "@types/node": "^20.8.0",
+    "@types/react": "^18.3.24",
+    "@types/react-dom": "^18.3.7",
+    "@typescript-eslint/eslint-plugin": "^6.7.0",
+    "@typescript-eslint/parser": "^6.7.0",
+    "eslint": "^8.50.0",
+    "eslint-config-next": "^14.0.0",
+    "prettier": "^3.0.3",
+    "typescript": "^5.2.2"
   },
   "engines": {
     "node": ">=18.0.0"
-  }
-} 
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/eu-tender-platform.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/eu-tender-platform/issues"
+  },
+  "homepage": "https://github.com/your-org/eu-tender-platform#readme"
+}
