@@ -1,5 +1,17 @@
 import { z } from 'zod'
 
+// Central definition of TenderStatus enum for reuse across all schemas
+const TenderStatusEnum = z.enum([
+  'draft',
+  'published',
+  'prequalification',
+  'bidding',
+  'evaluation',
+  'awarded',
+  'closed',
+  'cancelled',
+])
+
 export const tenderSchema = z.object({
   title: z.string().min(10, 'Titel skal være mindst 10 tegn').max(200, 'Titel kan ikke være længere end 200 tegn'),
   description: z.string().min(50, 'Beskrivelse skal være mindst 50 tegn').max(2000, 'Beskrivelse kan ikke være længere end 2000 tegn'),
@@ -15,7 +27,7 @@ export const tenderSchema = z.object({
 export const tenderSearchSchema = z.object({
   query: z.string().optional(),
   category: z.string().optional(),
-  status: z.enum(['draft', 'published', 'closed', 'awarded']).optional(),
+  status: TenderStatusEnum.optional(),
   min_value: z.number().optional(),
   max_value: z.number().optional(),
   date_from: z.string().optional(),
@@ -24,7 +36,7 @@ export const tenderSearchSchema = z.object({
 
 export const tenderFilterSchema = z.object({
   categories: z.array(z.string()).optional(),
-  statuses: z.array(z.enum(['draft', 'published', 'closed', 'awarded'])).optional(),
+  statuses: z.array(TenderStatusEnum).optional(),
   value_range: z.object({
     min: z.number().optional(),
     max: z.number().optional(),

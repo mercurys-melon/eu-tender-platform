@@ -1,66 +1,35 @@
-import { cookies } from 'next/headers'
-import { createServerClient } from '@supabase/ssr'
-import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { createServerClient as createSSRServerClient } from '@supabase/ssr'
 import type { Database } from './types'
-import { isEdgeRuntime } from '@/lib/utils/runtime'
+import { cookies, headers } from 'next/headers'
+import { env } from '@/config/env'
 
-function requireEnv(name: string): string {
-  const value = process.env[name]
-  if (!value) {
-    throw new Error(`Missing environment variable: ${name}`)
-  }
-  return value
-}
+const isEdge = () => typeof (globalThis as any).EdgeRuntime !== 'undefined'
 
-export function createClient() {
+export function getServerClient() {
   const cookieStore = cookies()
-
-  return createServerClient<Database>(
-    requireEnv('NEXT_PUBLIC_SUPABASE_URL'),
-    requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY'),
+  const headerList = headers()
+  return createSSRServerClient<Database>(
+    env.supabase.url,
+    env.supabase.anonKey,
     {
       cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-        set(name: string, value: string, options?: { path?: string; expires?: Date }) {
-          try {
-            cookieStore.set(name, value, options)
-          } catch {
-            // cookies() kan være read-only i server components
-          }
-        },
-        remove(name: string) {
-          try {
-            cookieStore.delete(name)
-          } catch {
-            // cookies() kan være read-only i server components
-          }
-        },
+        get(name: string) { return cookieStore.get(name)?.value },
+        set() {/* handled by Next */},
+        remove() {/* handled by Next */},
       },
+      global: { headers: Object.fromEntries(headerList) as any },
     }
   )
 }
 
-let serviceClient: SupabaseClient<Database> | null = null
+// Compatibility alias
+export const createClient = getServerClient
 
-export function createServiceClient() {
-  if (isEdgeRuntime()) {
-    throw new Error('createServiceClient is not supported in the Edge runtime')
-  }
-
-  if (!serviceClient) {
-    serviceClient = createSupabaseClient<Database>(
-      requireEnv('NEXT_PUBLIC_SUPABASE_URL'),
-      requireEnv('SUPABASE_SERVICE_ROLE_KEY'),
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      }
-    )
-  }
-
-  return serviceClient
+export function getServiceClient() {
+  if (!env.supabase.serviceKey) throw new Error('SUPABASE_SERVICE_ROLE_KEY missing')
+  return createSupabaseClient<Database>(env.supabase.url, env.supabase.serviceKey!)
 }
+
+// Compatibility alias
+export const createServiceClient = getServiceClient

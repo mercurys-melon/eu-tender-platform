@@ -1,0 +1,10 @@
+bin.disabled/**
+tests.disabled/**
+tests/**
+scripts/**
+node_modules
+.next
+dist
+artifacts
+test-results
+

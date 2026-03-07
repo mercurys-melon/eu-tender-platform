@@ -1,14 +1,25 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 
 export default function ResetPasswordPage() {
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Check for error parameters from URL (e.g., from callback redirect)
+  useEffect(() => {
+    const urlError = searchParams.get('error')
+    const errorDescription = searchParams.get('error_description')
+    if (urlError) {
+      setError(errorDescription || urlError)
+    }
+  }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -16,17 +27,67 @@ export default function ResetPasswordPage() {
     setError(null)
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      // Check if Supabase is configured
+      // In Next.js, NEXT_PUBLIC_* vars are available at build time
+      // If they're empty, the client will use placeholder values
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      
+      // Check if environment variables are missing or are placeholder values
+      if (!supabaseUrl || !supabaseKey || 
+          supabaseUrl.trim() === '' || supabaseKey.trim() === '' ||
+          supabaseUrl === 'https://placeholder.supabase.co' ||
+          supabaseKey === 'placeholder-anon-key') {
+        setError(
+          '⚠️ Supabase er ikke konfigureret. ' +
+          'Udfyld NEXT_PUBLIC_SUPABASE_URL og NEXT_PUBLIC_SUPABASE_ANON_KEY i .env.local filen og genstart serveren. ' +
+          'Se setup.md for instruktioner.'
+        )
+        setIsLoading(false)
+        return
+      }
+
+      const { error, data } = await supabase().auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/auth/callback?next=/update-password`,
       })
 
       if (error) {
-        setError(error.message)
+        // Check if it's a configuration issue
+        if (error.message?.includes('fetch') || 
+            error.message === 'Failed to fetch' ||
+            error.message?.toLowerCase().includes('network') ||
+            error.message?.toLowerCase().includes('connection')) {
+          setError(
+            'Kunne ikke oprette forbindelse til Supabase. ' +
+            'Tjek at NEXT_PUBLIC_SUPABASE_URL og NEXT_PUBLIC_SUPABASE_ANON_KEY er korrekt sat i .env.local, ' +
+            'og at du har genstartet udviklingsserveren efter at have opdateret filen.'
+          )
+        } else {
+          setError(error.message)
+        }
       } else {
         setIsSubmitted(true)
       }
-    } catch (err) {
-      setError('Der opstod en uventet fejl. Prøv igen.')
+    } catch (err: any) {
+      // Handle network errors and other exceptions
+      const errorMessage = err?.message || err?.toString() || ''
+      
+      if (errorMessage.includes('fetch') || 
+          errorMessage === 'Failed to fetch' ||
+          errorMessage.toLowerCase().includes('network') ||
+          errorMessage.toLowerCase().includes('connection') ||
+          errorMessage.toLowerCase().includes('cors')) {
+        setError(
+          'Kunne ikke oprette forbindelse til Supabase. ' +
+          'Tjek at NEXT_PUBLIC_SUPABASE_URL og NEXT_PUBLIC_SUPABASE_ANON_KEY er korrekt sat i .env.local, ' +
+          'og at du har genstartet udviklingsserveren efter at have opdateret filen.'
+        )
+      } else if (errorMessage) {
+        setError(errorMessage)
+      } else {
+        setError('Der opstod en uventet fejl. Prøv igen.')
+      }
+      console.error('Reset password error:', err)
     } finally {
       setIsLoading(false)
     }

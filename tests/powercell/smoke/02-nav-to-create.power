@@ -1,0 +1,51 @@
+/**
+ * Smoke Test: Navigation to Create Tender
+ * Verificerer at brugeren kan navigere til create tender side
+ */
+
+// TODO: Implementer Powercell browser automation DSL
+// Forventet syntaks (eksempel - tilpas til faktisk Powercell DSL):
+// - navigate(url) - naviger til URL
+// - click(selector) - klik element
+// - waitFor(selector) - vent på element
+// - assertUrl(url) - verificér URL
+// - assertVisible(selector) - verificér element er synligt
+
+export default async function (page: any) {
+  // Start på hjemmesiden eller en side med navigation
+  await page.navigate('/')
+  
+  // Verificér at navigation er synlig
+  await page.assertVisible('[data-testid="nav-main"]')
+  
+  // TODO: Verificér at nav-create link findes
+  // Note: nav-create er ikke implementeret i nav-bar.tsx endnu
+  // Hvis nav-create ikke findes, kan vi teste via direkte navigation til /create eller /tenders/new
+  // eller finde create link via anden selector
+  
+  // Prøv at finde create link - kan være i nav eller på en anden side
+  const createLinkSelector = '[data-testid="nav-create"]'
+  const hasCreateLink = await page.exists(createLinkSelector)
+  
+  if (hasCreateLink) {
+    // Klik på nav-create hvis det findes
+    await page.click(createLinkSelector)
+  } else {
+    // Alternativ: Naviger direkte til create side (hvis URL er kendt)
+    // TODO: Find korrekt URL for create tender side
+    await page.navigate('/tenders/create') // eller /create - tilpas til faktisk route
+  }
+  
+  // Vent på at create tender siden loader
+  await page.waitFor('[data-testid="tender-create-title"]', { timeout: 5000 })
+  
+  // Verificér at create tender formen er synlig
+  await page.assertVisible('[data-testid="tender-create-title"]')
+  await page.assertVisible('[data-testid="tender-create-form"]')
+  
+  // Verificér at vi er på create tender siden
+  const currentUrl = page.url()
+  if (!currentUrl.includes('/create') && !currentUrl.includes('/tenders')) {
+    throw new Error(`Expected to be on create tender page, but got ${currentUrl}`)
+  }
+}

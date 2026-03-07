@@ -1,10 +1,11 @@
 'use client'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
 
 export default function UpdatePassword() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [pw, setPw] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
@@ -14,7 +15,9 @@ export default function UpdatePassword() {
   useEffect(() => {
     const ensureSession = async () => {
       try {
-        const { data, error } = await supabase.auth.getSession()
+        // Session should already be set by the callback route on server-side
+        // Just check if we have a valid session
+        const { data, error } = await supabase().auth.getSession()
         if (error) throw error
         
         // Check if user has a valid session
@@ -22,13 +25,14 @@ export default function UpdatePassword() {
           setErr('Ugyldigt eller udløbet link. Prøv at sende et nyt.')
         } else {
           // Verify the user is authenticated
-          const { data: { user } } = await supabase.auth.getUser()
+          const { data: { user } } = await supabase().auth.getUser()
           if (!user || user.aud !== 'authenticated') {
             setErr('Ugyldig session. Prøv at sende et nyt link.')
           }
         }
       } catch (e: any) {
-        setErr(e.message)
+        console.error('Update password error:', e)
+        setErr(e.message || 'Der opstod en fejl. Prøv at sende et nyt link.')
       } finally {
         setChecking(false)
       }
@@ -39,7 +43,13 @@ export default function UpdatePassword() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErr(null); setOk(null)
-    const { error } = await supabase.auth.updateUser({ password: pw })
+    
+    if (pw.length < 6) {
+      setErr('Adgangskoden skal være mindst 6 tegn')
+      return
+    }
+    
+    const { error } = await supabase().auth.updateUser({ password: pw })
     if (error) setErr(error.message)
     else {
       setOk('Adgangskode opdateret. Logger ind…')
@@ -78,8 +88,10 @@ export default function UpdatePassword() {
                 className="input"
                 value={pw}
                 onChange={(e) => setPw(e.target.value)}
+                minLength={6}
                 required
               />
+              <p className="text-slate-grey text-xs mt-1">Minimum 6 tegn</p>
             </div>
             {ok && <p className="text-green-600 text-center">{ok}</p>}
             <button type="submit" className="btn-primary w-full">

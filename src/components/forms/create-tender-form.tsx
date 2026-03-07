@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
-import { MinecraftCard } from '@/components/ui/minecraft-card'
-import { MinecraftButton } from '@/components/ui/minecraft-button'
-import { MinecraftInput } from '@/components/ui/minecraft-input'
+import { BlockBidCard } from '@/components/ui/blockbid-card'
+import { BlockBidButton } from '@/components/ui/blockbid-button'
+import { BlockBidInput } from '@/components/ui/blockbid-input'
 
 interface FormData {
   title: string
@@ -152,7 +152,7 @@ export function CreateTenderForm() {
 
       console.log('Creating tender with data:', tenderData)
 
-      const { data, error } = await supabase
+      const { data, error } = await supabase()
         .from('tenders')
         .insert([tenderData])
         .select()
@@ -179,29 +179,29 @@ export function CreateTenderForm() {
   if (success) {
     return (
       <div className="max-w-2xl mx-auto">
-        <MinecraftCard>
+        <BlockBidCard variant="hover">
           <div className="text-center">
-            <h1 className="font-minecraft text-3xl font-bold text-green-600 mb-4">
+            <h1 className="text-h2 mb-4 text-hint-green" style={{ fontFamily: 'var(--font-space-grotesk), system-ui, sans-serif' }}>
               ✅ Udbud Oprettet!
             </h1>
-            <p className="font-minecraft text-gray-600 mb-6">
+            <p className="text-granite-grey mb-6" style={{ fontFamily: 'var(--font-inter), system-ui, sans-serif' }}>
               Dit udbud er blevet oprettet og publiceret succesfuldt.
             </p>
             <div className="flex justify-center gap-4">
               <Link href="/tenders">
-                <MinecraftButton>
+                <BlockBidButton>
                   Se Alle Udbud
-                </MinecraftButton>
+                </BlockBidButton>
               </Link>
-              <MinecraftButton 
-                variant="secondary"
+              <BlockBidButton 
+                variant="outline"
                 onClick={() => window.location.reload()}
               >
                 Opret Nyt Udbud
-              </MinecraftButton>
+              </BlockBidButton>
             </div>
           </div>
-        </MinecraftCard>
+        </BlockBidCard>
       </div>
     )
   }
@@ -212,9 +212,9 @@ export function CreateTenderForm() {
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <Link href="/tenders">
-            <MinecraftButton variant="secondary" size="sm">
+            <BlockBidButton variant="outline" size="sm">
               ← Tilbage til Udbud
-            </MinecraftButton>
+            </BlockBidButton>
           </Link>
         </div>
         
@@ -227,8 +227,8 @@ export function CreateTenderForm() {
       </div>
 
       {/* Form */}
-      <MinecraftCard>
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <BlockBidCard variant="hover">
+        <form onSubmit={handleSubmit} className="space-y-6" data-testid="tender-create-form">
           {/* General Error */}
           {errors.general && (
             <div className="font-minecraft p-4 bg-red-100 border-2 border-red-500 text-red-700">
@@ -239,22 +239,24 @@ export function CreateTenderForm() {
           {/* Title and Description */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
-              <MinecraftInput
+              <BlockBidInput
                 label="Titel *"
                 value={formData.title}
                 onChange={(e) => handleInputChange('title', e.target.value)}
                 placeholder="Indtast udbuds titel"
                 error={errors.title}
+                data-testid="tender-create-title"
               />
             </div>
             
             <div>
-              <MinecraftInput
+              <BlockBidInput
                 label="Enhed *"
                 value={formData.entity_id}
                 onChange={(e) => handleInputChange('entity_id', e.target.value)}
                 placeholder="F.eks. Københavns Kommune"
                 error={errors.entity_id}
+                data-testid="tender-entity"
               />
             </div>
           </div>
@@ -273,6 +275,7 @@ export function CreateTenderForm() {
                   ? 'border-red-500 bg-red-50' 
                   : 'border-gray-600 bg-gray-100'
               } text-gray-900`}
+              data-testid="tender-create-description"
             />
             {errors.description && (
               <p className="font-minecraft text-red-600 text-sm mt-1">
@@ -295,6 +298,7 @@ export function CreateTenderForm() {
                     ? 'border-red-500 bg-red-50' 
                     : 'border-gray-600 bg-gray-100'
                 } text-gray-900`}
+                data-testid="tender-create-category"
               >
                 <option value="">Vælg kategori</option>
                 {categories.map(category => (
@@ -311,13 +315,14 @@ export function CreateTenderForm() {
             </div>
 
             <div>
-              <MinecraftInput
+              <BlockBidInput
                 label="Estimeret Værdi *"
                 type="number"
                 value={formData.estimated_value}
                 onChange={(e) => handleInputChange('estimated_value', e.target.value)}
                 placeholder="100000"
                 error={errors.estimated_value}
+                data-testid="tender-create-estimated-value"
               />
             </div>
 
@@ -342,7 +347,7 @@ export function CreateTenderForm() {
           {/* Dates */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
-              <MinecraftInput
+              <BlockBidInput
                 label="Publiceringsdato *"
                 type="date"
                 value={formData.publication_date}
@@ -352,12 +357,13 @@ export function CreateTenderForm() {
             </div>
 
             <div>
-              <MinecraftInput
+              <BlockBidInput
                 label="Deadline *"
                 type="date"
                 value={formData.submission_deadline}
                 onChange={(e) => handleInputChange('submission_deadline', e.target.value)}
                 error={errors.submission_deadline}
+                data-testid="tender-create-submission-deadline"
               />
             </div>
           </div>
@@ -393,18 +399,19 @@ export function CreateTenderForm() {
 
           {/* Submit Button */}
           <div className="flex justify-center pt-6">
-            <MinecraftButton 
+            <BlockBidButton 
               type="submit" 
               size="lg"
               disabled={isSubmitting}
               className="min-w-[200px]"
               aria-label={isSubmitting ? 'Opretter udbud...' : 'Opret nyt udbud'}
+              data-testid="tender-create-submit"
             >
               {isSubmitting ? '🔄 Opretter...' : '📝 Opret Udbud'}
-            </MinecraftButton>
+            </BlockBidButton>
           </div>
         </form>
-      </MinecraftCard>
+        </BlockBidCard>
     </div>
   )
 } 

@@ -48,7 +48,7 @@ export default function TenderManagePage() {
     const fetchTenderAndUser = async () => {
       try {
         // Fetch tender
-        const { data: tenderData, error: tenderError } = await supabase
+        const { data: tenderData, error: tenderError } = await supabase()
           .from('tenders')
           .select('*')
           .eq('id', id)
@@ -62,7 +62,7 @@ export default function TenderManagePage() {
         setTender(tenderData)
 
         // Get current user
-        const { data: { user: currentUser } } = await supabase.auth.getUser()
+        const { data: { user: currentUser } } = await supabase().auth.getUser()
         setUser(currentUser)
 
         // Check if user is owner

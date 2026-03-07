@@ -3,6 +3,9 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/authz'
 import { z } from 'zod'
 import { json, badRequest, unauthorized, internal } from '@/lib/http'
+import type { Database } from '@/lib/supabase/types'
+
+type TenderQuestionsInsert = Database['public']['Tables']['tender_questions']['Insert']
 
 const questionSchema = z.object({
   question_text: z.string().min(1).max(1000),
@@ -65,7 +68,7 @@ export async function POST(
         contact_name: validatedData.contact_name,
         is_published: false,
         is_anonymized: true,
-      })
+      } as TenderQuestionsInsert)
       .select('id')
       .single()
 

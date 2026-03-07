@@ -9,9 +9,17 @@
     "start": "npx next start",
     "lint": "npx next lint",
     "lint:fix": "npx next lint --fix",
-    "type-check": "npx tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "type-check": "tsc --noEmit",
     "format": "npx prettier --write .",
-    "clean": "rm -rf .next dist"
+    "clean": "rm -rf .next dist",
+    "test:powercell": "node scripts/run-powercell-suite.mjs",
+    "test:smoke": "node scripts/run-powercell-suite.mjs --suite smoke",
+    "test:journeys": "node scripts/run-powercell-suite.mjs --suite journeys",
+    "test:edges": "node scripts/run-powercell-suite.mjs --suite edges",
+    "test:report": "node scripts/powercell-report.mjs",
+    "test:local": "node scripts/dev-test-run.mjs",
+    "udbud:functional-test": "node scripts/run-from-repo-root.mjs && node scripts/udbud-functional-test.mjs"
   },
   "keywords": [
     "blockbid",
@@ -43,12 +51,12 @@
     "@types/node": "^20.8.0",
     "@types/react": "^18.3.24",
     "@types/react-dom": "^18.3.7",
-    "@typescript-eslint/eslint-plugin": "^6.7.0",
-    "@typescript-eslint/parser": "^6.7.0",
-    "eslint": "^8.50.0",
-    "eslint-config-next": "^14.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.5",
     "prettier": "^3.0.3",
-    "typescript": "^5.2.2"
+    "typescript": "^5.3.3"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -1,6 +1,6 @@
-import { Breadcrumb } from '@/components/ui/breadcrumb'
+﻿import { Breadcrumb } from '@/components/ui/breadcrumb'
 import { FAQ } from '@/components/marketing/FAQ'
-import { getTranslations } from '@/lib/i18n'
+import { useTranslations } from '@/lib/i18n'
 
 export const metadata = {
   title: 'Ofte stillede spørgsmål - BlockBid',
@@ -8,7 +8,7 @@ export const metadata = {
 }
 
 export default function FAQPage() {
-  const t = getTranslations('da')
+  const t = useTranslations('da')
   
   return (
     <div className="min-h-screen bg-arctic-white">
@@ -113,3 +113,4 @@ export default function FAQPage() {
     </div>
   )
 }
+

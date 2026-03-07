@@ -1,0 +1,81 @@
+/**
+ * Smoke Test: Tender Detail Tabs Navigation
+ * Verificerer at tender detail tabs kan navigeres mellem
+ */
+
+// TODO: Implementer Powercell browser automation DSL
+// Forventet syntaks (eksempel - tilpas til faktisk Powercell DSL):
+// - navigate(url) - naviger til URL
+// - click(selector) - klik element
+// - waitFor(selector) - vent på element
+// - assertUrl(url) - verificér URL
+// - assertVisible(selector) - verificér element er synligt
+
+export default async function (page: any) {
+  // TODO: Få en eksisterende tender ID fra test data eller opret en test tender
+  // For nu, prøv at navigere til en tender detail side
+  // Dette kan kræve at vi først opretter en tender eller bruger en eksisterende
+  
+  // Prøv at navigere til tenders liste først
+  await page.navigate('/tenders')
+  
+  // Vent på at listen loader
+  await page.waitFor('[data-testid="tenders-list"]', { timeout: 5000 })
+    .catch(() => page.waitFor('body', { timeout: 5000 }))
+  
+  // TODO: Find første tender link og klik på det
+  // Eller naviger direkte til en kendt tender ID hvis tilgængelig
+  const firstTenderLink = await page.query('[data-testid="tender-link"]') ||
+                          await page.query('a[href*="/tenders/"]')
+  
+  if (firstTenderLink) {
+    await page.click(firstTenderLink)
+  } else {
+    // Alternativ: Naviger direkte til en test tender
+    // TODO: Erstat med faktisk tender ID fra test data
+    await page.navigate('/tenders/test-tender-id')
+  }
+  
+  // Vent på at tender detail siden loader
+  await page.waitFor('[data-testid="tender-tab-overview"]', { timeout: 5000 })
+  
+  // Verificér at alle tabs er synlige
+  await page.assertVisible('[data-testid="tender-tab-overview"]')
+  await page.assertVisible('[data-testid="tender-tab-documents"]')
+  await page.assertVisible('[data-testid="tender-tab-qna"]')
+  await page.assertVisible('[data-testid="tender-tab-bids"]')
+  
+  // Test navigation mellem tabs
+  // Klik på Documents tab
+  await page.click('[data-testid="tender-tab-documents"]')
+  await page.waitForNavigation({ timeout: 3000 })
+  const documentsUrl = page.url()
+  if (!documentsUrl.includes('/documents')) {
+    throw new Error(`Expected to navigate to documents tab, but got ${documentsUrl}`)
+  }
+  
+  // Klik på Q&A tab
+  await page.click('[data-testid="tender-tab-qna"]')
+  await page.waitForNavigation({ timeout: 3000 })
+  const qnaUrl = page.url()
+  if (!qnaUrl.includes('/qna')) {
+    throw new Error(`Expected to navigate to Q&A tab, but got ${qnaUrl}`)
+  }
+  
+  // Klik på Bids tab
+  await page.click('[data-testid="tender-tab-bids"]')
+  await page.waitForNavigation({ timeout: 3000 })
+  const bidsUrl = page.url()
+  if (!bidsUrl.includes('/bids')) {
+    throw new Error(`Expected to navigate to bids tab, but got ${bidsUrl}`)
+  }
+  
+  // Gå tilbage til Overview tab
+  await page.click('[data-testid="tender-tab-overview"]')
+  await page.waitForNavigation({ timeout: 3000 })
+  const overviewUrl = page.url()
+  // Overview kan være på /tenders/{id} eller /tenders/{id}/overview
+  if (!overviewUrl.match(/\/tenders\/[^/]+$/)) {
+    throw new Error(`Expected to navigate to overview tab, but got ${overviewUrl}`)
+  }
+}

@@ -1,4 +1,4 @@
-import { PublishingAdapter, ESPDPayload, ESPDResult, NoticePayload, NoticeResult, AwardPayload } from './publishing';
+﻿import { PublishingAdapter, ESPDPayload, ESPDResult, NoticePayload, NoticeResult, AwardPayload } from './publishing';
 import { blockBidConfig } from '../config/env';
 import { buildEspdJson, buildEspdWithXml } from '../lib/espd/builder';
 import { espdApi } from '../api/espd';
@@ -20,10 +20,7 @@ export class ApiAdapter implements PublishingAdapter {
       // Build ESPD request with organization details
       const espdRequest = buildEspdJson({
         title: `ESPD for ${ctx.tenderTitle}`,
-        buyer: {
-          name: blockBidConfig.organizationName || 'Unknown Organization',
-          identifier: blockBidConfig.organizationId || '00000000'
-        },
+        buyer: { name: "Unknown Organization", identifier: "00000000" },
         preset: input.exclusionPreset || 'standardDK',
         criteria: input.selectionCriteria,
         specialConditions: input.specialConditions
@@ -62,11 +59,7 @@ export class ApiAdapter implements PublishingAdapter {
             title: payload.title,
             description: payload.description,
             cpv: payload.cpv,
-            buyer: {
-              name: blockBidConfig.organizationName || 'Unknown Organization',
-              identifier: blockBidConfig.organizationId || '00000000',
-              country: 'DK'
-            },
+            buyer: { name: "Unknown Organization", identifier: "00000000" },
             procedure: payload.procedure as 'open' | 'restricted' | 'negotiated',
             lots: [{
               id: 'LOT-1',
@@ -87,11 +80,7 @@ export class ApiAdapter implements PublishingAdapter {
             title: payload.title,
             description: payload.description,
             cpv: payload.cpv,
-            buyer: {
-              name: blockBidConfig.organizationName || 'Unknown Organization',
-              identifier: blockBidConfig.organizationId || '00000000',
-              country: 'DK'
-            },
+            buyer: { name: "Unknown Organization", identifier: "00000000" },
             winnerName: 'Winner Name', // This would come from the award payload
             contractValue: payload.valueEstimate,
             lots: [{
@@ -108,11 +97,7 @@ export class ApiAdapter implements PublishingAdapter {
             title: payload.title,
             description: payload.description,
             cpv: payload.cpv,
-            buyer: {
-              name: blockBidConfig.organizationName || 'Unknown Organization',
-              identifier: blockBidConfig.organizationId || '00000000',
-              country: 'DK'
-            },
+            buyer: { name: "Unknown Organization", identifier: "00000000" },
             categories: ['General'], // This would come from the qualification system payload
             lots: [{
               id: 'LOT-1',
@@ -131,7 +116,7 @@ export class ApiAdapter implements PublishingAdapter {
 
       return {
         id: result.id,
-        status: result.status,
+        status: (result.status === 'processing' ? 'submitted' : result.status) as 'submitted' | 'accepted' | 'published' | 'failed',
         ojsId: result.ojsId,
         message: result.message || `${payload.kind} notice submitted via API`
       };
@@ -153,10 +138,7 @@ export class ApiAdapter implements PublishingAdapter {
       // Submit award via eForms API
       const result = await eformsApi.submitAward({
         title: payload.tenderTitle,
-        buyer: {
-          name: blockBidConfig.organizationName || 'Unknown Organization',
-          identifier: blockBidConfig.organizationId || '00000000'
-        },
+        buyer: { name: "Unknown Organization", identifier: "00000000" },
         winnerName: payload.winnerName,
         winnerIdentifier: payload.winnerRegNo,
         contractValue: payload.contractValue
@@ -164,7 +146,7 @@ export class ApiAdapter implements PublishingAdapter {
 
       return {
         id: result.id,
-        status: result.status,
+        status: (result.status === 'processing' ? 'submitted' : result.status) as 'submitted' | 'accepted' | 'published' | 'failed',
         ojsId: result.ojsId,
         message: result.message || 'Award notice submitted via API'
       };
@@ -176,3 +158,4 @@ export class ApiAdapter implements PublishingAdapter {
     }
   }
 }
+

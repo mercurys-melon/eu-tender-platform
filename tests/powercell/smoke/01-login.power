@@ -1,0 +1,49 @@
+/**
+ * Smoke Test: Login Flow
+ * Verificerer at brugeren kan logge ind og blive redirectet korrekt
+ */
+
+// TODO: Implementer Powercell browser automation DSL
+// Forventet syntaks (eksempel - tilpas til faktisk Powercell DSL):
+// - navigate(url) - naviger til URL
+// - fill(selector, value) - udfyld input
+// - click(selector) - klik element
+// - waitFor(selector) - vent på element
+// - assertUrl(url) - verificér URL
+// - assertVisible(selector) - verificér element er synligt
+
+export default async function (page: any) {
+  // Naviger til login side med buyer role
+  await page.navigate('/login?role=buyer')
+  
+  // Verificér at login formen er synlig
+  await page.assertVisible('[data-testid="auth-login-email"]')
+  await page.assertVisible('[data-testid="auth-login-password"]')
+  await page.assertVisible('[data-testid="auth-login-submit"]')
+  
+  // Udfyld login formular
+  // TODO: Hent test credentials fra environment/config
+  const testEmail = process.env.TEST_USER_EMAIL || 'test@example.com'
+  const testPassword = process.env.TEST_USER_PASSWORD || 'testpassword123'
+  
+  await page.fill('[data-testid="auth-login-email"]', testEmail)
+  await page.fill('[data-testid="auth-login-password"]', testPassword)
+  
+  // Klik submit
+  await page.click('[data-testid="auth-login-submit"]')
+  
+  // Vent på redirect (vent på at URL ændrer sig eller at et element på destinationen vises)
+  // TODO: Verificér faktisk redirect URL - kan være /tenders eller /buyer afhængigt af app flow
+  await page.waitForNavigation({ timeout: 5000 })
+  
+  // Verificér at vi er blevet redirectet til enten /tenders eller /buyer
+  const currentUrl = page.url()
+  const isRedirected = currentUrl.includes('/tenders') || currentUrl.includes('/buyer')
+  
+  if (!isRedirected) {
+    throw new Error(`Expected redirect to /tenders or /buyer, but got ${currentUrl}`)
+  }
+  
+  // Verificér at vi ikke længere er på login siden
+  await page.assertNotVisible('[data-testid="auth-login-email"]')
+}

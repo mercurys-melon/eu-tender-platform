@@ -9,6 +9,8 @@ import TenderDetailsHeader from '@/components/tenders/TenderDetailsHeader'
 import QnAList from '@/components/tenders/QnAList'
 import AskQuestionForm from '@/components/tenders/AskQuestionForm'
 import DocumentsList from '@/components/tenders/DocumentsList'
+import DocumentsUploader from '@/components/tenders/DocumentsUploader'
+import { EvaluationSummary } from '@/components/tenders/EvaluationSummary'
 
 interface Tender {
   id: string
@@ -29,14 +31,22 @@ interface Tender {
 interface TenderDetailsClientProps {
   id: string
   initialTender?: Tender | null
+  evaluationData?: {
+    awardedBidId: string | null
+    evaluationStartedAt: string | null
+    evaluationCompletedAt: string | null
+    evaluationDocuments: Array<{ path: string; fileName: string; url: string | null }>
+    winnerSupplierName: string | null
+  }
 }
 
-export default function TenderDetailsClient({ id, initialTender = null }: TenderDetailsClientProps) {
+export default function TenderDetailsClient({ id, initialTender = null, evaluationData }: TenderDetailsClientProps) {
   const [tender, setTender] = useState<Tender | null>(initialTender)
   const [loading, setLoading] = useState(!initialTender)
   const [error, setError] = useState<string | null>(null)
   const [isOwner, setIsOwner] = useState(false)
   const [user, setUser] = useState<any>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
     if (!id) {
@@ -51,7 +61,7 @@ export default function TenderDetailsClient({ id, initialTender = null }: Tender
 
         if (!resolvedTender) {
           setLoading(true)
-          const { data: tenderData, error: tenderError } = await supabase
+          const { data: tenderData, error: tenderError } = await supabase()
             .from('tenders')
             .select('*')
             .eq('id', id)
@@ -65,7 +75,7 @@ export default function TenderDetailsClient({ id, initialTender = null }: Tender
           setTender(tenderData)
         }
 
-        const { data: { user: currentUser } } = await supabase.auth.getUser()
+        const { data: { user: currentUser } } = await supabase().auth.getUser()
         setUser(currentUser)
 
         if (currentUser && resolvedTender) {
@@ -106,7 +116,16 @@ export default function TenderDetailsClient({ id, initialTender = null }: Tender
           <div className="lg:col-span-2 space-y-6">
             {/* Documents Section */}
             <div className="card p-6">
-              <DocumentsList tenderId={tender.id} />
+              <DocumentsList tenderId={tender.id} key={refreshKey} />
+              {isOwner && (
+                <div className="mt-6">
+                  <h3 className="text-lg font-semibold mb-2">Upload dokument</h3>
+                  <DocumentsUploader 
+                    tenderId={tender.id} 
+                    onUploadComplete={() => setRefreshKey(k => k + 1)} 
+                  />
+                </div>
+              )}
             </div>
 
             {/* Q&A Section */}
@@ -117,6 +136,17 @@ export default function TenderDetailsClient({ id, initialTender = null }: Tender
 
           {/* Right Column - Ask Question and Bid Form */}
           <div className="space-y-6">
+            {/* Evaluation Summary - Only for buyers */}
+            {isOwner && evaluationData && (
+              <EvaluationSummary
+                awardedBidId={evaluationData.awardedBidId}
+                evaluationStartedAt={evaluationData.evaluationStartedAt}
+                evaluationCompletedAt={evaluationData.evaluationCompletedAt}
+                evaluationDocuments={evaluationData.evaluationDocuments}
+                winnerSupplierName={evaluationData.winnerSupplierName}
+              />
+            )}
+
             {/* Ask Question Form */}
             {user && (
               <div className="card p-6">

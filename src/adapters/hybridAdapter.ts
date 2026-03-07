@@ -9,11 +9,20 @@ import { BlockBidError } from '../utils/errors';
  */
 export class HybridAdapter implements PublishingAdapter {
   private apiAdapter: ApiAdapter;
-  private uiAdapter: UiAdapter;
+  private uiAdapter?: UiAdapter;
+  private page?: Page;
 
-  constructor(page: Page) {
+  constructor(page?: Page) {
     this.apiAdapter = new ApiAdapter();
-    this.uiAdapter = new UiAdapter(page);
+    this.page = page;
+    if (page) {
+      this.uiAdapter = new UiAdapter(page);
+    }
+  }
+
+  private requirePage(): Page {
+    if (!this.page) throw new Error('HybridAdapter requires a Playwright Page at runtime');
+    return this.page;
   }
 
   /**
@@ -29,6 +38,10 @@ export class HybridAdapter implements PublishingAdapter {
       console.warn('⚠️  ESPD API creation failed, falling back to UI:', apiError instanceof Error ? apiError.message : String(apiError));
       
       try {
+        if (!this.uiAdapter) {
+          const page = this.requirePage();
+          this.uiAdapter = new UiAdapter(page);
+        }
         const result = await this.uiAdapter.createOrAttachESPD(input, ctx);
         console.log('✅ ESPD created successfully via UI fallback');
         return {
@@ -57,6 +70,10 @@ export class HybridAdapter implements PublishingAdapter {
       console.warn(`⚠️  ${payload.kind} notice API submission failed, falling back to UI:`, apiError instanceof Error ? apiError.message : String(apiError));
       
       try {
+        if (!this.uiAdapter) {
+          const page = this.requirePage();
+          this.uiAdapter = new UiAdapter(page);
+        }
         const result = await this.uiAdapter.submitNotice(payload);
         console.log(`✅ ${payload.kind} notice submitted successfully via UI fallback`);
         return {
@@ -85,6 +102,10 @@ export class HybridAdapter implements PublishingAdapter {
       console.warn('⚠️  Award notice API submission failed, falling back to UI:', apiError instanceof Error ? apiError.message : String(apiError));
       
       try {
+        if (!this.uiAdapter) {
+          const page = this.requirePage();
+          this.uiAdapter = new UiAdapter(page);
+        }
         const result = await this.uiAdapter.submitAward(payload);
         console.log('✅ Award notice submitted successfully via UI fallback');
         return {

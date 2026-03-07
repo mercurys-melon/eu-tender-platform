@@ -3,9 +3,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
-import { MinecraftButton } from '@/components/ui/minecraft-button'
-import { MinecraftInput } from '@/components/ui/minecraft-input'
-import { MinecraftCard } from '@/components/ui/minecraft-card'
+import { BlockBidButton } from '@/components/ui/blockbid-button'
+import { BlockBidInput } from '@/components/ui/blockbid-input'
+import { BlockBidCard } from '@/components/ui/blockbid-card'
 
 interface AuthFormProps {
   mode: 'login' | 'register'
@@ -32,7 +32,7 @@ export function AuthForm({ mode }: AuthFormProps) {
         if (error) throw error
         router.push('/tenders')
       } else {
-        const { error } = await supabase.auth.signUp({
+        const { error } = await supabase().auth.signUp({
           email,
           password,
         })
@@ -49,61 +49,64 @@ export function AuthForm({ mode }: AuthFormProps) {
   }
 
   return (
-    <MinecraftCard className="w-full max-w-md mx-auto">
+    <BlockBidCard variant="hover" className="w-full max-w-md mx-auto">
       <div className="text-center mb-6">
-        <h1 className="font-minecraft text-3xl font-bold text-gray-800 mb-2">
+        <h1 className="text-h2 mb-2" style={{ fontFamily: 'var(--font-space-grotesk), system-ui, sans-serif' }}>
           BlockBid
         </h1>
-        <p className="font-minecraft text-gray-600">
+        <p className="text-granite-grey" style={{ fontFamily: 'var(--font-inter), system-ui, sans-serif' }}>
           {mode === 'login' ? 'Log ind på din konto' : 'Opret ny konto'}
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <MinecraftInput
+      <form onSubmit={handleSubmit} className="space-y-4" data-testid={`${mode}-form`}>
+        <BlockBidInput
           label="Email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="din@email.dk"
           required
+          data-testid={`${mode}-email`}
         />
 
-        <MinecraftInput
+        <BlockBidInput
           label="Adgangskode"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="••••••••"
           required
+          data-testid={`${mode}-password`}
         />
 
         {error && (
-          <div className="font-minecraft text-sm text-red-600 bg-red-100 p-3 border-2 border-red-400">
+          <div className="text-sm text-sunset-orange bg-sunset-orange/10 p-3 rounded-full border border-sunset-orange/30" style={{ fontFamily: 'var(--font-inter), system-ui, sans-serif' }} data-testid={`${mode}-error`}>
             {error}
           </div>
         )}
 
-        <MinecraftButton
+        <BlockBidButton
           type="submit"
           className="w-full"
           disabled={loading}
+          data-testid={`${mode}-submit`}
         >
           {loading ? 'Indlæser...' : mode === 'login' ? 'Log Ind' : 'Opret Konto'}
-        </MinecraftButton>
+        </BlockBidButton>
       </form>
 
       <div className="mt-6 text-center">
-        <p className="font-minecraft text-sm text-gray-600">
+        <p className="text-sm text-granite-grey" style={{ fontFamily: 'var(--font-inter), system-ui, sans-serif' }}>
           {mode === 'login' ? 'Har du ikke en konto?' : 'Har du allerede en konto?'}
           <a
             href={mode === 'login' ? '/register' : '/login'}
-            className="font-minecraft text-green-600 hover:text-green-700 ml-1 underline"
+            className="text-xp-sky-blue hover:text-digital-navy ml-1 underline"
           >
             {mode === 'login' ? 'Opret konto' : 'Log ind'}
           </a>
         </p>
       </div>
-    </MinecraftCard>
+    </BlockBidCard>
   )
 } 

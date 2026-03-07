@@ -21,6 +21,12 @@ export default function RegisterPage() {
     setIsLoading(true)
     setError(null)
 
+    if (password.length < 6) {
+      setError('Adgangskoden skal være mindst 6 tegn')
+      setIsLoading(false)
+      return
+    }
+
     if (password !== confirmPassword) {
       setError('Adgangskoderne matcher ikke')
       setIsLoading(false)
@@ -28,7 +34,7 @@ export default function RegisterPage() {
     }
 
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const { data, error } = await supabase().auth.signUp({
         email,
         password,
       })
@@ -85,8 +91,10 @@ export default function RegisterPage() {
               className="input" 
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              minLength={6}
               required 
             />
+            <p className="text-slate-grey text-xs mt-1">Minimum 6 tegn</p>
           </div>
           <div>
             <label className="label">Bekræft adgangskode</label>
@@ -95,6 +103,7 @@ export default function RegisterPage() {
               className="input" 
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
+              minLength={6}
               required 
             />
           </div>

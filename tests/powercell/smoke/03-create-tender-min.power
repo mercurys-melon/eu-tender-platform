@@ -1,0 +1,86 @@
+/**
+ * Smoke Test: Create Tender (Minimum Fields)
+ * Verificerer at brugeren kan oprette et tender med minimum felter
+ */
+
+// TODO: Implementer Powercell browser automation DSL
+// Forventet syntaks (eksempel - tilpas til faktisk Powercell DSL):
+// - navigate(url) - naviger til URL
+// - fill(selector, value) - udfyld input
+// - select(selector, value) - vælg option i select
+// - click(selector) - klik element
+// - waitFor(selector) - vent på element
+// - assertUrl(url) - verificér URL
+// - assertVisible(selector) - verificér element er synligt
+// - assertText(selector, text) - verificér tekst indhold
+
+export default async function (page: any) {
+  // Naviger til create tender side
+  // TODO: Find korrekt URL - kan være /tenders/create eller /create
+  await page.navigate('/tenders/create')
+  
+  // Vent på at formularen loader
+  await page.waitFor('[data-testid="tender-create-form"]', { timeout: 5000 })
+  
+  // Udfyld minimum påkrævede felter
+  // Title (påkrævet)
+  await page.fill('[data-testid="tender-create-title"]', 'Test Tender - Smoke Test')
+  
+  // Description (påkrævet)
+  await page.fill('[data-testid="tender-create-description"]', 'Dette er en test tender oprettet af smoke test')
+  
+  // Category (påkrævet)
+  // TODO: Vælg en gyldig kategori fra dropdown
+  await page.select('[data-testid="tender-create-category"]', 'IT og software')
+  
+  // Estimated value (påkrævet)
+  await page.fill('[data-testid="tender-create-estimated-value"]', '100000')
+  
+  // Submission deadline (påkrævet)
+  // TODO: Beregn en fremtidig dato (fx 30 dage fra nu)
+  const futureDate = new Date()
+  futureDate.setDate(futureDate.getDate() + 30)
+  const deadlineDate = futureDate.toISOString().split('T')[0] // Format: YYYY-MM-DD
+  await page.fill('[data-testid="tender-create-submission-deadline"]', deadlineDate)
+  
+  // Publication date (påkrævet)
+  const today = new Date().toISOString().split('T')[0]
+  await page.fill('[data-testid="tender-create-publication-date"]', today)
+  
+  // Entity ID (påkrævet)
+  // TODO: Find entity_id input selector - kan være tender-create-entity eller lignende
+  await page.fill('[data-testid="tender-create-entity"]', 'Test Entity')
+  
+  // Klik submit
+  await page.click('[data-testid="tender-create-submit"]')
+  
+  // Vent på redirect eller success indikation
+  // TODO: Verificér hvad der sker efter submit:
+  // - Redirect til tender detail side?
+  // - Success besked vises?
+  // - Redirect til /tenders liste?
+  
+  await page.waitForNavigation({ timeout: 10000 })
+  
+  // Verificér at vi er blevet redirectet eller at success indikation vises
+  const currentUrl = page.url()
+  const hasSuccess = 
+    currentUrl.includes('/tenders/') || // Redirect til tender detail
+    currentUrl.includes('/tenders') ||  // Redirect til tender liste
+    await page.exists('[data-testid="tender-create-success"]') || // Success besked
+    await page.exists('.success') // Generel success klasse
+  
+  if (!hasSuccess) {
+    // Tjek om der er en fejlbesked
+    const hasError = await page.exists('[data-testid="tender-create-error"]') || 
+                     await page.exists('.error')
+    
+    if (hasError) {
+      const errorText = await page.textContent('[data-testid="tender-create-error"]') || 
+                        await page.textContent('.error')
+      throw new Error(`Tender creation failed: ${errorText}`)
+    }
+    
+    throw new Error(`Expected redirect or success indication after tender creation, but got ${currentUrl}`)
+  }
+}

@@ -3,6 +3,12 @@ import { createClient } from '@/lib/supabase/server'
 import { getCurrentUser, assertTenderOwner } from '@/lib/authz'
 import { z } from 'zod'
 import { json, badRequest, unauthorized, internal } from '@/lib/http'
+import type { Database } from '@/lib/supabase/types'
+
+export const runtime = 'nodejs'
+
+type TenderQuestionsUpdate = Database['public']['Tables']['tender_questions']['Update']
+type TenderQuestionsRow = Database['public']['Tables']['tender_questions']['Row']
 
 const moderationSchema = z.object({
   question_text_public: z.string().max(1000).optional(),
@@ -82,11 +88,11 @@ export async function PATCH(
     // Update the question
     const { data, error } = await supabase
       .from('tender_questions')
-      .update(updateData)
+      .update<TenderQuestionsUpdate>(updateData)
       .eq('id', params.questionId)
       .eq('tender_id', params.id)
       .select('*')
-      .single()
+      .single<TenderQuestionsRow>()
 
     if (error) {
       console.error('Error updating question:', error)

@@ -6,15 +6,13 @@
 
 @layer base {
   :root {
-    /* BlockBid Digital Nordic Retro Color System */
+    /* BlockBid Brand Colors */
     --cloud-white: #FFFFFF;
     --xp-sky-blue: #3B82F6;
-    --digital-navy: #1E3A8A;
+    --digital-navy: #1E246A;
     --soft-sand: #F5F5F5;
-    --pixel-grey: #9CA3AF;
-    --hint-green: #10B981;
-    --sunset-orange: #F97316;
-    --pastel-yellow: #FACC15;
+    --pixel-grey: #15C5AF;
+    --sunset-orange: #F52516;
     
     /* Legacy brand colors (backwards compatibility) */
     --arctic-white: #FFFFFF;
@@ -24,6 +22,8 @@
     --silver-mist: #E6E6E6;
     --emerald-green: #2F6F4E;
     --deep-orange: #D95F0E;
+    --hint-green: #10B981;
+    --pastel-yellow: #FACC15;
     
     /* Semantic color mapping */
     --background: 0 0% 100%;
@@ -151,39 +151,33 @@
   .container-blockbid { @apply mx-auto max-w-7xl px-6; }
   .section-blockbid { @apply py-16 md:py-24; }
 
-  /* Button Utilities - XP Inspired */
+  /* Button Utilities - BlockBid Brand */
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-xp px-6 py-3 font-semibold
-           bg-xp-sky-blue text-white hover:bg-blue-600 
-           shadow-xp-button hover:shadow-blockbid-lg
+    @apply inline-flex items-center justify-center rounded-full px-6 py-3 font-medium
+           bg-sunset-orange text-white
+           shadow-sm hover:shadow-md
+           hover:bg-[#D91E0F]
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-xp-sky-blue/50
-           transition-all duration-200 transform hover:scale-105;
+           transition-all duration-200;
+    font-family: var(--font-inter), system-ui, sans-serif;
   }
   
   .btn-outline {
-    @apply inline-flex items-center justify-center rounded-xp px-6 py-3 font-semibold
-           border-2 border-xp-sky-blue text-xp-sky-blue bg-white
-           hover:bg-xp-sky-blue hover:text-white
-           shadow-sm hover:shadow-xp-soft
+    @apply inline-flex items-center justify-center rounded-xp px-6 py-3 font-medium
+           border border-xp-sky-blue text-xp-sky-blue bg-white
+           hover:bg-xp-sky-blue/10
            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-xp-sky-blue/50
            transition-all duration-200;
-  }
-  
-  .btn-accent {
-    @apply inline-flex items-center justify-center rounded-xp px-6 py-3 font-semibold
-           bg-sunset-orange text-white hover:bg-orange-600
-           shadow-xp-button hover:shadow-blockbid-lg
-           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange/50
-           transition-all duration-200 transform hover:scale-105;
+    font-family: var(--font-inter), system-ui, sans-serif;
   }
 
-  /* Card Utilities - XP Soft Aesthetic */
+  /* Card Utilities - BlockBid Brand */
   .card { 
-    @apply rounded-xp-lg bg-white shadow-blockbid border border-soft-sand;
+    @apply rounded-[20px] bg-white shadow-sm border border-soft-sand/50;
   }
   .card-hover { 
-    @apply card hover:shadow-blockbid-lg hover:border-xp-sky-blue/20 
-           transition-all duration-300 transform hover:-translate-y-1;
+    @apply card hover:shadow-md hover:border-xp-sky-blue/30 
+           transition-all duration-300;
   }
   .card-xp {
     @apply rounded-xp-lg bg-gradient-to-br from-white to-soft-sand 

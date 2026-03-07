@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import { MinecraftCard } from '@/components/ui/minecraft-card'
@@ -47,7 +47,7 @@ export default function QnAModerationPanel({ tenderId }: QnAModerationPanelProps
       const response = await fetch(`/api/tenders/${tenderId}/questions?status=all`)
       
       if (!response.ok) {
-        throw new Error('Kunne ikke hente spørgsmål')
+        throw new Error('Kunne ikke hente spÃ¸rgsmÃ¥l')
       }
 
       const data = await response.json()
@@ -80,7 +80,7 @@ export default function QnAModerationPanel({ tenderId }: QnAModerationPanelProps
 
       if (!response.ok) {
         const data = await response.json()
-        throw new Error(data.error || 'Kunne ikke opdatere spørgsmål')
+        throw new Error(data.error || 'Kunne ikke opdatere spÃ¸rgsmÃ¥l')
       }
 
       setEditingQuestion(null)
@@ -102,7 +102,7 @@ export default function QnAModerationPanel({ tenderId }: QnAModerationPanelProps
 
       if (!response.ok) {
         const data = await response.json()
-        throw new Error(data.error || 'Kunne ikke publicere spørgsmål')
+        throw new Error(data.error || 'Kunne ikke publicere spÃ¸rgsmÃ¥l')
       }
 
       fetchQuestions() // Refresh the list
@@ -123,7 +123,7 @@ export default function QnAModerationPanel({ tenderId }: QnAModerationPanelProps
 
       if (!response.ok) {
         const data = await response.json()
-        throw new Error(data.error || 'Kunne ikke afpublicere spørgsmål')
+        throw new Error(data.error || 'Kunne ikke afpublicere spÃ¸rgsmÃ¥l')
       }
 
       fetchQuestions() // Refresh the list
@@ -149,7 +149,7 @@ export default function QnAModerationPanel({ tenderId }: QnAModerationPanelProps
   if (loading) {
     return (
       <MinecraftCard className="p-6">
-        <p className="font-minecraft text-center">⏳ Indlæser spørgsmål...</p>
+        <p className="font-minecraft text-center">â³ IndlÃ¦ser spÃ¸rgsmÃ¥l...</p>
       </MinecraftCard>
     )
   }
@@ -157,14 +157,14 @@ export default function QnAModerationPanel({ tenderId }: QnAModerationPanelProps
   if (error) {
     return (
       <MinecraftCard className="p-6">
-        <p className="font-minecraft text-red-600 text-center">❌ {error}</p>
+        <p className="font-minecraft text-red-600 text-center">âŒ {error}</p>
       </MinecraftCard>
     )
   }
 
   return (
     <MinecraftCard className="p-6">
-      <h3 className="font-minecraft text-xl mb-4">⚙️ Q&A Moderation</h3>
+      <h3 className="font-minecraft text-xl mb-4">âš™ï¸ Q&A Moderation</h3>
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200 mb-6">
@@ -193,8 +193,8 @@ export default function QnAModerationPanel({ tenderId }: QnAModerationPanelProps
       {filteredQuestions.length === 0 ? (
         <p className="font-minecraft text-gray-600 text-center">
           {activeTab === 'unpublished' 
-            ? 'Ingen upublicerede spørgsmål' 
-            : 'Ingen publicerede spørgsmål'
+            ? 'Ingen upublicerede spÃ¸rgsmÃ¥l' 
+            : 'Ingen publicerede spÃ¸rgsmÃ¥l'
           }
         </p>
       ) : (
@@ -205,7 +205,7 @@ export default function QnAModerationPanel({ tenderId }: QnAModerationPanelProps
               {activeTab === 'unpublished' && (
                 <div className="mb-4 p-3 bg-gray-50 rounded">
                   <p className="font-minecraft text-sm text-gray-600 mb-2">
-                    <strong>Originalt spørgsmål:</strong>
+                    <strong>Originalt spÃ¸rgsmÃ¥l:</strong>
                   </p>
                   <p className="font-minecraft">{question.question_text}</p>
                   {question.contact_email && (
@@ -220,7 +220,7 @@ export default function QnAModerationPanel({ tenderId }: QnAModerationPanelProps
               {/* Public Question */}
               <div className="mb-4">
                 <label className="block font-minecraft mb-2">
-                  Publiceret spørgsmål:
+                  Publiceret spÃ¸rgsmÃ¥l:
                 </label>
                 {editingQuestion === question.id ? (
                   <textarea
@@ -254,7 +254,7 @@ export default function QnAModerationPanel({ tenderId }: QnAModerationPanelProps
                     disabled={editingQuestion !== question.id}
                     className="mr-2"
                   />
-                  Anonymiser spørgsmål
+                  Anonymiser spÃ¸rgsmÃ¥l
                 </label>
               </div>
 
@@ -298,13 +298,13 @@ export default function QnAModerationPanel({ tenderId }: QnAModerationPanelProps
                       onClick={() => handleSave(question.id)}
                       className="bg-green-600 hover:bg-green-700"
                     >
-                      💾 Gem
+                      ðŸ’¾ Gem
                     </MinecraftButton>
                     <MinecraftButton
                       onClick={() => setEditingQuestion(null)}
                       className="bg-gray-600 hover:bg-gray-700"
                     >
-                      ❌ Annuller
+                      âŒ Annuller
                     </MinecraftButton>
                   </>
                 ) : (
@@ -313,7 +313,7 @@ export default function QnAModerationPanel({ tenderId }: QnAModerationPanelProps
                       onClick={() => handleEdit(question)}
                       className="bg-blue-600 hover:bg-blue-700"
                     >
-                      ✏️ Rediger
+                      âœï¸ Rediger
                     </MinecraftButton>
                     
                     {!question.is_published ? (
@@ -322,14 +322,14 @@ export default function QnAModerationPanel({ tenderId }: QnAModerationPanelProps
                         className="bg-green-600 hover:bg-green-700"
                         disabled={!question.answer_text}
                       >
-                        📢 Publicer
+                        ðŸ“¢ Publicer
                       </MinecraftButton>
                     ) : (
                       <MinecraftButton
                         onClick={() => handleUnpublish(question.id)}
                         className="bg-yellow-600 hover:bg-yellow-700"
                       >
-                        🔒 Afpublicer
+                        ðŸ”’ Afpublicer
                       </MinecraftButton>
                     )}
                   </>
@@ -342,3 +342,4 @@ export default function QnAModerationPanel({ tenderId }: QnAModerationPanelProps
     </MinecraftCard>
   )
 }
+

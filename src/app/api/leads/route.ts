@@ -1,6 +1,9 @@
 import { NextRequest } from 'next/server'
-import { supabase } from '@/lib/supabase/client'
+import { getServerClient } from '@/lib/supabase/server'
 import { json, badRequest, internal } from '@/lib/http'
+import type { Database } from '@/lib/supabase/types'
+
+type LeadsInsert = Database['public']['Tables']['leads']['Insert']
 
 interface LeadData {
   name: string
@@ -36,9 +39,10 @@ export async function POST(request: NextRequest) {
     // Try to save to Supabase if credentials are available
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       try {
+        const supabase = getServerClient()
         const { error } = await supabase
           .from('leads')
-          .insert([
+          .insert<LeadsInsert>([
             {
               name: body.name.trim(),
               email: body.email.trim().toLowerCase(),

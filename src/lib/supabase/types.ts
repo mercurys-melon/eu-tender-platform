@@ -1,331 +1,76 @@
+// Minimal Database typings (midlertidigt til build er grønt)
 export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[]
+  | string | number | boolean | null
+  | { [key: string]: Json | undefined } | Json[]
 
 export interface Database {
   public: {
     Tables: {
       tenders: {
         Row: {
-          id: string
-          title: string
-          description: string
-          entity_id: string
-          category: string
-          estimated_value: number
-          currency: string
-          submission_deadline: string
-          publication_date: string
-          status: 'draft' | 'published' | 'closed' | 'awarded'
-          espd_required: boolean
-          ted_published: boolean
-          created_at: string
-          updated_at: string
-          created_by?: string
+          id: string; title: string; description: string; entity_id: string;
+          category: string | null; estimated_value: number | null; currency: string | null;
+          submission_deadline: string | null; publication_date: string | null; status: string | null;
+          awarded_bid_id: string | null; evaluation_started_at: string | null; evaluation_completed_at: string | null;
+          evaluation_documents: string[] | null; created_at: string; created_by: string | null;
         }
-        Insert: {
-          id?: string
-          title: string
-          description: string
-          entity_id: string
-          category: string
-          estimated_value: number
-          currency: string
-          submission_deadline: string
-          publication_date: string
-          status?: 'draft' | 'published' | 'closed' | 'awarded'
-          espd_required?: boolean
-          ted_published?: boolean
-          created_at?: string
-          updated_at?: string
-          created_by?: string
+        Insert: Partial<Database['public']['Tables']['tenders']['Row']> & {
+          id?: string; title: string; description: string; entity_id: string;
         }
-        Update: {
-          id?: string
-          title?: string
-          description?: string
-          entity_id?: string
-          category?: string
-          estimated_value?: number
-          currency?: string
-          submission_deadline?: string
-          publication_date?: string
-          status?: 'draft' | 'published' | 'closed' | 'awarded'
-          espd_required?: boolean
-          ted_published?: boolean
-          created_at?: string
-          updated_at?: string
-          created_by?: string
-        }
-      }
-      users: {
-        Row: {
-          id: string
-          email: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          email: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          email?: string
-          created_at?: string
-        }
-      }
-      suppliers: {
-        Row: {
-          id: string
-          user_id: string
-          company_name: string
-          cvr_number: string
-          contact_person: string
-          email: string
-          phone: string
-          address: string
-          city: string
-          postal_code: string
-          country: string
-          categories: string[]
-          qualifications: string[]
-          documents: string[]
-          status: 'pending' | 'approved' | 'rejected'
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          company_name: string
-          cvr_number: string
-          contact_person: string
-          email: string
-          phone: string
-          address: string
-          city: string
-          postal_code: string
-          country: string
-          categories?: string[]
-          qualifications?: string[]
-          documents?: string[]
-          status?: 'pending' | 'approved' | 'rejected'
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          company_name?: string
-          cvr_number?: string
-          contact_person?: string
-          email?: string
-          phone?: string
-          address?: string
-          city?: string
-          postal_code?: string
-          country?: string
-          categories?: string[]
-          qualifications?: string[]
-          documents?: string[]
-          status?: 'pending' | 'approved' | 'rejected'
-          created_at?: string
-          updated_at?: string
-        }
+        Update: Partial<Database['public']['Tables']['tenders']['Row']>
       }
       bids: {
         Row: {
-          id: string
-          tender_id: string
-          supplier_id: string
-          amount: number
-          currency: string
-          documents: string[]
-          espd_data: Json
-          status: 'submitted' | 'under_review' | 'accepted' | 'rejected'
-          submitted_at: string
-          created_at: string
-          updated_at: string
+          id: string; tender_id: string; supplier_id: string;
+          amount: number | null; currency: string | null; documents: string[] | null;
+          status: 'submitted'|'under_review'|'under_evaluation'|'accepted'|'rejected'|'winner'|'not_awarded';
+          evaluation_notes: string | null; submitted_at: string | null; created_at: string; updated_at: string | null;
         }
-        Insert: {
-          id?: string
-          tender_id: string
-          supplier_id: string
-          amount: number
-          currency: string
-          documents?: string[]
-          espd_data?: Json
-          status?: 'submitted' | 'under_review' | 'accepted' | 'rejected'
-          submitted_at?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          tender_id?: string
-          supplier_id?: string
-          amount?: number
-          currency?: string
-          documents?: string[]
-          espd_data?: Json
-          status?: 'submitted' | 'under_review' | 'accepted' | 'rejected'
-          submitted_at?: string
-          created_at?: string
-          updated_at?: string
-        }
-      }
-      documents: {
-        Row: {
-          id: string
-          name: string
-          type: string
-          size: number
-          url: string
-          tender_id?: string
-          supplier_id?: string
-          bid_id?: string
-          uploaded_by: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          name: string
-          type: string
-          size: number
-          url: string
-          tender_id?: string
-          supplier_id?: string
-          bid_id?: string
-          uploaded_by: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          name?: string
-          type?: string
-          size?: number
-          url?: string
-          tender_id?: string
-          supplier_id?: string
-          bid_id?: string
-          uploaded_by?: string
-          created_at?: string
-        }
-      }
-      notifications: {
-        Row: {
-          id: string
-          user_id: string
-          title: string
-          message: string
-          type: 'info' | 'success' | 'warning' | 'error'
-          read: boolean
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          title: string
-          message: string
-          type?: 'info' | 'success' | 'warning' | 'error'
-          read?: boolean
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          title?: string
-          message?: string
-          type?: 'info' | 'success' | 'warning' | 'error'
-          read?: boolean
-          created_at?: string
-        }
+        Insert: Partial<Database['public']['Tables']['bids']['Row']> & { tender_id: string; supplier_id: string }
+        Update: Partial<Database['public']['Tables']['bids']['Row']>
       }
       tender_questions: {
         Row: {
-          id: string
-          tender_id: string
-          asked_by: string | null
-          question_text: string
-          question_text_public: string
-          answer_text: string | null
-          is_published: boolean
-          is_anonymized: boolean
-          contact_email: string | null
-          contact_name: string | null
-          created_at: string
-          updated_at: string
+          id: string; tender_id: string; asked_by: string | null; question_text: string; question_text_public: string | null;
+          answer_text: string | null; is_published: boolean; is_anonymized: boolean; contact_email: string | null; contact_name: string | null;
+          created_at: string; updated_at: string | null;
         }
-        Insert: {
-          id?: string
-          tender_id: string
-          asked_by?: string | null
-          question_text: string
-          question_text_public?: string
-          answer_text?: string | null
-          is_published?: boolean
-          is_anonymized?: boolean
-          contact_email?: string | null
-          contact_name?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          tender_id?: string
-          asked_by?: string | null
-          question_text?: string
-          question_text_public?: string
-          answer_text?: string | null
-          is_published?: boolean
-          is_anonymized?: boolean
-          contact_email?: string | null
-          contact_name?: string | null
-          created_at?: string
-          updated_at?: string
-        }
+        Insert: Partial<Database['public']['Tables']['tender_questions']['Row']> & { tender_id: string; question_text: string }
+        Update: Partial<Database['public']['Tables']['tender_questions']['Row']>
       }
       tender_documents: {
         Row: {
-          id: string
-          tender_id: string
-          storage_path: string
-          file_name: string
-          mime_type: string
-          size_bytes: number
-          is_public: boolean
-          created_by: string
-          created_at: string
+          id: string; tender_id: string; storage_path: string; file_name: string; mime_type: string;
+          size_bytes: number; created_by: string; created_at: string;
         }
         Insert: {
-          id?: string
-          tender_id: string
-          storage_path: string
-          file_name: string
-          mime_type: string
-          size_bytes: number
-          is_public?: boolean
-          created_by: string
-          created_at?: string
+          id?: string; tender_id: string; storage_path: string; file_name: string; mime_type: string; size_bytes: number;
+          created_by?: string; created_at?: string; /* udfyldes af trigger/RLS */
         }
-        Update: {
-          id?: string
-          tender_id?: string
-          storage_path?: string
-          file_name?: string
-          mime_type?: string
-          size_bytes?: number
-          is_public?: boolean
-          created_by?: string
-          created_at?: string
+        Update: Partial<Database['public']['Tables']['tender_documents']['Row']>
+      }
+      leads: {
+        Row: { id: string; name: string; email: string; company: string; message: string; source: string | null; created_at: string }
+        Insert: Partial<Database['public']['Tables']['leads']['Row']> & { name: string; email: string; company: string; message: string }
+        Update: Partial<Database['public']['Tables']['leads']['Row']>
+      }
+      profiles: {
+        Row: { id: string; role: 'supplier' | 'buyer'; created_at: string | null; updated_at: string | null }
+        Insert: { id: string; role: 'supplier' | 'buyer'; created_at?: string | null; updated_at?: string | null }
+        Update: Partial<Database['public']['Tables']['profiles']['Row']>
+      }
+      publication_jobs: {
+        Row: {
+          id: string; tender_id: string; status: 'pending' | 'processing' | 'completed' | 'failed' | 'retrying';
+          payload_version: number; request_id: string | null; payload: Json; response: Json | null;
+          last_error: string | null; attempts: number; max_attempts: number;
+          next_retry_at: string | null; created_at: string; updated_at: string; completed_at: string | null;
         }
+        Insert: Partial<Database['public']['Tables']['publication_jobs']['Row']> & {
+          tender_id: string; payload: Json; request_id: string;
+        }
+        Update: Partial<Database['public']['Tables']['publication_jobs']['Row']>
       }
     }
   }
 }
-

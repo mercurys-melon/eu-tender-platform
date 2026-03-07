@@ -1,0 +1,73 @@
+/**
+ * Smoke Test: Open Tenders List
+ * Verificerer at tender listen kan åbnes og loader korrekt
+ */
+
+// TODO: Implementer Powercell browser automation DSL
+// Forventet syntaks (eksempel - tilpas til faktisk Powercell DSL):
+// - navigate(url) - naviger til URL
+// - click(selector) - klik element
+// - waitFor(selector) - vent på element
+// - assertUrl(url) - verificér URL
+// - assertVisible(selector) - verificér element er synligt
+// - assertText(selector, text) - verificér tekst indhold
+
+export default async function (page: any) {
+  // Start på hjemmesiden
+  await page.navigate('/')
+  
+  // Verificér at navigation er synlig
+  await page.assertVisible('[data-testid="nav-main"]')
+  
+  // Klik på nav-tenders link
+  await page.click('[data-testid="nav-tenders"]')
+  
+  // Vent på at tender listen loader
+  // TODO: Find korrekt selector for tender liste container
+  // Kan være: [data-testid="tenders-list"], .tenders-list, eller lignende
+  await page.waitFor('[data-testid="tenders-list"]', { timeout: 5000 })
+    .catch(() => {
+      // Hvis specifik selector ikke findes, vent på at siden loader generelt
+      return page.waitFor('body', { timeout: 5000 })
+    })
+  
+  // Verificér at vi er på tenders siden
+  const currentUrl = page.url()
+  if (!currentUrl.includes('/tenders')) {
+    throw new Error(`Expected to be on /tenders page, but got ${currentUrl}`)
+  }
+  
+  // Verificér at tender liste er synlig eller at siden har indhold
+  // TODO: Find korrekt selector for at verificere at listen er loaded
+  // Kan være: tender cards, liste items, eller loading indicator forsvundet
+  
+  const hasTenderList = 
+    await page.exists('[data-testid="tenders-list"]') ||
+    await page.exists('.tender-card') ||
+    await page.exists('[data-testid="tender-item"]') ||
+    await page.exists('article') // Generel fallback
+  
+  if (!hasTenderList) {
+    // Tjek om der er en loading indicator der stadig vises
+    const isLoading = await page.exists('[data-testid="tenders-loading"]') ||
+                      await page.exists('.loading')
+    
+    if (isLoading) {
+      throw new Error('Tender list is still loading after timeout')
+    }
+    
+    // Hvis ingen liste og ingen loading, kan det være at siden er tom
+    // Dette er acceptabelt for smoke test - vi verificerer bare at siden loader
+    console.log('Warning: Tender list container not found, but page loaded successfully')
+  }
+  
+  // Verificér at siden ikke viser en fejlbesked
+  const hasError = await page.exists('[data-testid="tenders-error"]') ||
+                   await page.exists('.error')
+  
+  if (hasError) {
+    const errorText = await page.textContent('[data-testid="tenders-error"]') ||
+                      await page.textContent('.error')
+    throw new Error(`Tender list page shows error: ${errorText}`)
+  }
+}

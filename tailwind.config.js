@@ -8,19 +8,13 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Primary Colors - BlockBid "Digital Nordic Retro"
+        // BlockBid Brand Colors
         'cloud-white': '#FFFFFF',
         'xp-sky-blue': '#3B82F6',
-        'digital-navy': '#1E3A8A',
-        
-        // Secondary Colors
+        'digital-navy': '#1E246A',
         'soft-sand': '#F5F5F5',
-        'pixel-grey': '#9CA3AF',
-        'hint-green': '#10B981',
-        
-        // Accent Colors
-        'sunset-orange': '#F97316',
-        'pastel-yellow': '#FACC15',
+        'pixel-grey': '#15C5AF',
+        'sunset-orange': '#F52516',
         
         // Legacy colors (kept for backwards compatibility)
         'arctic-white': '#FFFFFF',
@@ -30,6 +24,8 @@ module.exports = {
         'silver-mist': '#E6E6E6',
         'emerald-green': '#2F6F4E',
         'deep-orange': '#D95F0E',
+        'hint-green': '#10B981',
+        'pastel-yellow': '#FACC15',
         'border': 'hsl(var(--border))',
       },
       fontSize: {
