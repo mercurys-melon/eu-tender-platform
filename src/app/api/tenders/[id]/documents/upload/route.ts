@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerClient } from '@/lib/supabase/server'
 import { uploadBufferToTenderBucket, signUrl } from '@/lib/storage/server'
 import type { Database } from '@/lib/supabase/types'
+import { logAction } from '@/lib/audit'
 type TD_Insert = Database['public']['Tables']['tender_documents']['Insert']
 type TD_Row = Database['public']['Tables']['tender_documents']['Row']
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -33,5 +34,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   const row = (data ?? {}) as TD_Row
   const signed_url = await signUrl(storage_path)
+  await logAction(user.id, 'document.uploaded', 'tender', params.id, { file_name: file.name, size_bytes: file.size })
   return NextResponse.json({ ...row, signed_url }, { status: 201 })
 }

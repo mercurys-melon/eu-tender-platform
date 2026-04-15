@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -49,7 +51,7 @@ export default function LoginPage() {
         .from('profiles')
         .select('role')
         .eq('id', data.user.id)
-        .maybeSingle()
+        .maybeSingle() as { data: { role: string } | null, error: unknown }
       
       if (profileError) {
         console.error('Error fetching profile:', profileError)
@@ -66,7 +68,7 @@ export default function LoginPage() {
       
       // If dbRole is falsy, upsert the profile with finalRole
       if (!dbRole) {
-        const { error: upsertError } = await supabase()
+        const { error: upsertError } = await (supabase() as any)
           .from('profiles')
           .upsert({ id: data.user.id, role: finalRole }, { onConflict: 'id' })
         

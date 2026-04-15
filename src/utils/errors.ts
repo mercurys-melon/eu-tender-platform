@@ -5,8 +5,8 @@ import { join } from 'path';
 
 export class BlockBidError extends Error {
   public readonly testName: string;
-  public readonly screenshotPath?: string;
-  public readonly htmlPath?: string;
+  public screenshotPath?: string;
+  public htmlPath?: string;
 
   constructor(
     message: string,

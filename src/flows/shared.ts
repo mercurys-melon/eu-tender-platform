@@ -323,7 +323,7 @@ export class SharedFlowHelpers {
           }
         }
 
-        await this.page.waitForTimeout(2000);
+        await new Promise(resolve => setTimeout(resolve, 2000));
       } catch (error) {
         if (error instanceof BlockBidError) {
           throw error;

@@ -17,8 +17,26 @@ interface TenderSectionProps {
   description: string
   tenders: TenderWithStats[]
   emptyMessage: string
-  primaryAction?: (tender: TenderWithStats) => { label: string; href: string }
   headerAction?: React.ReactNode
+}
+
+function getPrimaryAction(tender: TenderWithStats): { label: string; href: string } {
+  switch (tender.status) {
+    case 'draft':
+      return { label: 'Fortsæt med at oprette', href: `/buyer/mine-udbud/${tender.id}` }
+    case 'published':
+      return { label: tender.participants_count ? 'Se ansøgninger' : 'Administrer udbud', href: `/buyer/mine-udbud/${tender.id}` }
+    case 'prequalification':
+      return { label: 'Vurder ansøgninger', href: `/buyer/mine-udbud/${tender.id}` }
+    case 'bidding':
+      return { label: 'Se tilbud', href: `/buyer/mine-udbud/${tender.id}` }
+    case 'evaluation':
+      return { label: 'Evaluer tilbud', href: `/buyer/mine-udbud/${tender.id}` }
+    case 'awarded':
+      return { label: 'Se tildelingsresultat', href: `/buyer/mine-udbud/${tender.id}` }
+    default:
+      return { label: 'Se udbud', href: `/buyer/mine-udbud/${tender.id}` }
+  }
 }
 
 type SortOption = 'deadline' | 'created' | 'title'
@@ -35,12 +53,11 @@ const SearchIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
   </svg>
 )
 
-export function TenderSection({ 
-  title, 
-  description, 
-  tenders, 
+export function TenderSection({
+  title,
+  description,
+  tenders,
   emptyMessage,
-  primaryAction,
   headerAction
 }: TenderSectionProps) {
   const [searchQuery, setSearchQuery] = useState('')
@@ -121,7 +138,7 @@ export function TenderSection({
       {filteredAndSorted.length > 0 ? (
         <div className="space-y-4">
           {filteredAndSorted.map(tender => {
-            const action = primaryAction ? primaryAction(tender) : { label: 'Se udbud', href: `/tenders/${tender.id}` }
+            const action = getPrimaryAction(tender)
             return (
               <div
                 key={tender.id}

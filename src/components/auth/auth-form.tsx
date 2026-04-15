@@ -25,7 +25,7 @@ export function AuthForm({ mode }: AuthFormProps) {
 
     try {
       if (mode === 'login') {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { error } = await supabase().auth.signInWithPassword({
           email,
           password,
         })

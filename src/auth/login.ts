@@ -99,7 +99,7 @@ export class BlockBidAuth {
         }
 
         // Wait a bit before checking again
-        await this.page.waitForTimeout(1000);
+        await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (error) {
         if (error instanceof BlockBidError) {
           throw error;

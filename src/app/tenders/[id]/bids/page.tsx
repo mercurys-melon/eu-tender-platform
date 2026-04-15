@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/server'
@@ -17,7 +19,7 @@ async function getTender(id: string) {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('tenders')
-    .select('id, title, status, awarded_bid_id')
+    .select('id, title, status, awarded_bid_id, evaluation_documents')
     .eq('id', id)
     .single()
 
@@ -62,7 +64,7 @@ async function getBids(tenderId: string): Promise<BidWithSupplier[]> {
     return (bidsData as BidWithSupplier[]) || []
   }
 
-  return (data as BidWithSupplier[]) || []
+  return (data as unknown as BidWithSupplier[]) || []
 }
 
 export default async function BidsPage({ params }: { params: { id: string } }) {
@@ -75,7 +77,7 @@ export default async function BidsPage({ params }: { params: { id: string } }) {
   const bids = await getBids(params.id)
 
   // Sort bids by amount (ascending) - already sorted in query, but ensure it
-  const sortedBids = [...bids].sort((a, b) => a.amount - b.amount)
+  const sortedBids = [...bids].sort((a, b) => (a.amount ?? 0) - (b.amount ?? 0))
 
   // Fetch evaluation documents
   let evaluationDocuments: Array<{ path: string; fileName: string; url: string | null }> = []

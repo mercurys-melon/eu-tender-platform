@@ -1,9 +1,11 @@
-export const json = (data: unknown, init: number | ResponseInit = 200) =>
-  new Response(JSON.stringify(data), {
-    status: typeof init === 'number' ? init : init.status,
-    headers: { 'content-type': 'application/json; charset=utf-8' },
-    ...(typeof init === 'number' ? {} : init),
+export const json = (data: unknown, init: number | ResponseInit = 200) => {
+  const status = typeof init === 'number' ? init : (init.status ?? 200)
+  const extraHeaders = typeof init === 'number' ? {} : (init.headers as Record<string, string> ?? {})
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'content-type': 'application/json; charset=utf-8', ...extraHeaders },
   })
+}
 
 export const badRequest = (msg: string) => json({ error: msg }, 400)
 export const unauthorized = () => json({ error: 'unauthorized' }, 401)

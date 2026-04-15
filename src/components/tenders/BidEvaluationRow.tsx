@@ -108,8 +108,8 @@ export function BidEvaluationRow({ bid, tenderId, isWinner, onUpdate }: BidEvalu
         <td className="py-4 px-4 text-digital-navy font-medium">
           {new Intl.NumberFormat('da-DK', {
             style: 'currency',
-            currency: bid.currency,
-          }).format(bid.amount)}
+            currency: bid.currency ?? undefined,
+          }).format(bid.amount ?? 0)}
         </td>
         <td className="py-4 px-4">
           <select
@@ -127,7 +127,7 @@ export function BidEvaluationRow({ bid, tenderId, isWinner, onUpdate }: BidEvalu
           </select>
         </td>
         <td className="py-4 px-4 text-granite-grey">
-          {new Date(bid.submitted_at).toLocaleDateString('da-DK', {
+          {new Date(bid.submitted_at ?? '').toLocaleDateString('da-DK', {
             year: 'numeric',
             month: 'long',
             day: 'numeric',

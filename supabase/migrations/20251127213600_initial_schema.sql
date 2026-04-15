@@ -1,0 +1,1 @@
+-- All schema already applied to remote database. This file exists for migration tracking only.

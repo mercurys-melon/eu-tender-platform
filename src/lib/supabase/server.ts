@@ -1,14 +1,13 @@
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createServerClient as createSSRServerClient } from '@supabase/ssr'
 import type { Database } from './types'
-import { cookies, headers } from 'next/headers'
+import { cookies } from 'next/headers'
 import { env } from '@/config/env'
 
 const isEdge = () => typeof (globalThis as any).EdgeRuntime !== 'undefined'
 
 export function getServerClient() {
   const cookieStore = cookies()
-  const headerList = headers()
   return createSSRServerClient<Database>(
     env.supabase.url,
     env.supabase.anonKey,
@@ -18,7 +17,6 @@ export function getServerClient() {
         set() {/* handled by Next */},
         remove() {/* handled by Next */},
       },
-      global: { headers: Object.fromEntries(headerList) as any },
     }
   )
 }

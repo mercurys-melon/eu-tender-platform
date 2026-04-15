@@ -43,7 +43,9 @@
     "scripts/**",
     "server/**",
     "src/flows/**",
+    "src/adapters/**",
     "src/auth/login.ts",
+    "src/utils/errors.ts",
     "src/utils/selectors.ts",
     "**/*.spec.ts",
     "**/*.spec.tsx"

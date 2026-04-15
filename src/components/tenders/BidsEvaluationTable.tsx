@@ -32,7 +32,7 @@ export function BidsEvaluationTable({ initialBids, tenderId, awardedBidId }: Bid
     setBids(initialBids)
   }, [initialBids])
 
-  const sortedBids = [...bids].sort((a, b) => a.amount - b.amount)
+  const sortedBids = [...bids].sort((a, b) => (a.amount ?? 0) - (b.amount ?? 0))
 
   return (
     <div className="overflow-x-auto">

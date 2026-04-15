@@ -84,7 +84,7 @@ export function EvaluationDocumentsUpload({ tenderId, initialDocuments }: Evalua
             <BlockBidButton
               variant="secondary"
               size="md"
-              as="span"
+              {...{ as: 'span' } as any}
               className="cursor-pointer"
               disabled={uploading}
             >

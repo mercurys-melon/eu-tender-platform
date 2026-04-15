@@ -1,6 +1,6 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getCurrentUser } from '@/lib/authz'
+import { getCurrentUser, assertTenderOwner } from '@/lib/authz'
 import { z } from 'zod'
 import { json, badRequest, unauthorized, internal } from '@/lib/http'
 import type { Database } from '@/lib/supabase/types'
@@ -12,6 +12,11 @@ const questionSchema = z.object({
   contact_email: z.string().email().optional(),
   contact_name: z.string().max(100).optional(),
 })
+
+// Fallback OPTIONS handler — middleware handles the common case, this catches edge cases
+export function OPTIONS() {
+  return new NextResponse(null, { status: 200 })
+}
 
 export async function POST(
   request: NextRequest,
@@ -106,6 +111,15 @@ export async function GET(
     const supabase = createClient()
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') || 'published'
+
+    // Non-public view requires authentication + tender ownership
+    if (status !== 'published') {
+      const user = await getCurrentUser()
+      if (!user) return unauthorized()
+
+      const isOwner = await assertTenderOwner(user.id, params.id)
+      if (!isOwner) return json({ error: 'Kun tender-ejeren kan se upublicerede spørgsmål' }, 403)
+    }
 
     let query = supabase
       .from('tender_questions')

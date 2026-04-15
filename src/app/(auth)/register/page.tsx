@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -45,7 +47,7 @@ export default function RegisterPage() {
         // Set role in profile
         const userId = data.user.id
         if (userId) {
-          await supabase
+          await (supabase() as any)
             .from('profiles')
             .upsert({ id: userId, role: initialRole }, { onConflict: 'id' })
           

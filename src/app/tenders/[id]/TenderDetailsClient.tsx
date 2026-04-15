@@ -71,8 +71,8 @@ export default function TenderDetailsClient({ id, initialTender = null, evaluati
             throw tenderError
           }
 
-          resolvedTender = tenderData
-          setTender(tenderData)
+          resolvedTender = tenderData as unknown as Tender
+          setTender(tenderData as unknown as Tender)
         }
 
         const { data: { user: currentUser } } = await supabase().auth.getUser()

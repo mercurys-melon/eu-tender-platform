@@ -1,19 +1,13 @@
+export const dynamic = 'force-dynamic'
+
 import Link from 'next/link'
-import { formatDistanceToNow, format } from 'date-fns'
-import { da } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/server'
 import { getSessionAndRole } from '@/lib/auth/session'
 import { redirect } from 'next/navigation'
-import { TenderStatusBadge } from '@/components/tenders/TenderStatusBadge'
 import { UpcomingDeadlinesCard } from '@/components/tenders/UpcomingDeadlinesCard'
 import { QuickActionsCard } from '@/components/buyer/QuickActionsCard'
 import { TenderSection } from '@/components/buyer/TenderSection'
 import type { Tender, UpcomingDeadline } from '@/lib/tenders/types'
-import { 
-  getTenderStatusGroup, 
-  canTransitionTenderStatus,
-  getNextTenderStatuses 
-} from '@/lib/tenders/lifecycle'
 
 interface TenderWithStats extends Tender {
   bids_count?: number
@@ -141,68 +135,6 @@ function buildUpcomingDeadlines(tenders: TenderWithStats[]): UpcomingDeadline[] 
     .slice(0, 5)
 }
 
-function getPrimaryActionButton(tender: TenderWithStats) {
-  const canPublish = canTransitionTenderStatus(tender.status as any, 'published')
-  
-  switch (tender.status) {
-    case 'draft':
-      return {
-        label: 'Fortsæt med at oprette',
-        href: `/buyer/mine-udbud/${tender.id}`,
-        showPublish: canPublish,
-      }
-    case 'published':
-      return {
-        label: tender.participants_count ? 'Se ansøgninger' : 'Administrer udbud',
-        href: `/buyer/mine-udbud/${tender.id}`,
-        showPublish: false,
-      }
-    case 'prequalification':
-      return {
-        label: 'Vurder ansøgninger',
-        href: `/buyer/mine-udbud/${tender.id}`,
-        showPublish: false,
-      }
-    case 'bidding':
-      return {
-        label: 'Se tilbud',
-        href: `/buyer/mine-udbud/${tender.id}`,
-        showPublish: false,
-      }
-    case 'evaluation':
-      return {
-        label: 'Evaluer tilbud',
-        href: `/buyer/mine-udbud/${tender.id}`,
-        showPublish: false,
-      }
-    case 'awarded':
-      return {
-        label: 'Se tildelingsresultat',
-        href: `/buyer/mine-udbud/${tender.id}`,
-        showPublish: false,
-      }
-    default:
-      return {
-        label: 'Se udbud',
-        href: `/buyer/mine-udbud/${tender.id}`,
-        showPublish: false,
-      }
-  }
-}
-
-// Simple line icon components
-const CalendarIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-  </svg>
-)
-
-const DocumentIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-  </svg>
-)
-
 export default async function BuyerDashboard() {
   // Get session and role
   const sessionData = await getSessionAndRole()
@@ -228,10 +160,10 @@ export default async function BuyerDashboard() {
   const tenders = await getBuyerTenders(userId)
 
   // Group tenders by section
-  const { preparation, active, awarded, completed } = groupTendersBySection(tenders)
+  const { preparation, active, awarded, completed } = groupTendersBySection(tenders as unknown as TenderWithStats[])
 
   // Build upcoming deadlines
-  const upcomingDeadlines = buildUpcomingDeadlines(tenders)
+  const upcomingDeadlines = buildUpcomingDeadlines(tenders as unknown as TenderWithStats[])
 
   return (
     <div className="min-h-screen bg-xp-sky-blue/5">
@@ -262,7 +194,6 @@ export default async function BuyerDashboard() {
               description="Udbud du er i gang med at oprette. De er ikke offentliggjort endnu."
               tenders={preparation}
               emptyMessage="Du har ingen udbud i udkast lige nu."
-              primaryAction={getPrimaryActionButton}
               headerAction={
                 <Link href="/buyer/opret" className="btn-primary">
                   Opret nyt udbud
@@ -276,7 +207,6 @@ export default async function BuyerDashboard() {
               description="Aktive udbud, hvor leverandører kan ansøge, byde eller hvor der evalueres."
               tenders={active}
               emptyMessage="Du har ingen aktive udbud lige nu. Når du publicerer et udbud, vises det her."
-              primaryAction={getPrimaryActionButton}
             />
 
             {/* Tildelte udbud */}
@@ -285,7 +215,6 @@ export default async function BuyerDashboard() {
               description="Udbud hvor tildeling er gennemført."
               tenders={awarded}
               emptyMessage="Ingen tildelte udbud endnu."
-              primaryAction={getPrimaryActionButton}
             />
 
             {/* Afsluttede og annullerede udbud */}
@@ -294,7 +223,6 @@ export default async function BuyerDashboard() {
               description="Historiske udbud – til arkiv og dokumentation."
               tenders={completed}
               emptyMessage="Ingen afsluttede/annullerede udbud at vise endnu."
-              primaryAction={getPrimaryActionButton}
             />
           </div>
         </div>

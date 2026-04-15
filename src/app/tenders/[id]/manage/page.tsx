@@ -59,7 +59,7 @@ export default function TenderManagePage() {
           throw tenderError
         }
         
-        setTender(tenderData)
+        setTender(tenderData as unknown as Tender)
 
         // Get current user
         const { data: { user: currentUser } } = await supabase().auth.getUser()
@@ -67,7 +67,7 @@ export default function TenderManagePage() {
 
         // Check if user is owner
         if (currentUser && tenderData) {
-          const ownerCheck = currentUser.id === tenderData.entity_id
+          const ownerCheck = currentUser.id === (tenderData as any).entity_id
           setIsOwner(ownerCheck)
           
           if (!ownerCheck) {

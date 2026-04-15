@@ -1,0 +1,704 @@
+openapi: 3.0.1
+info:
+    title: Ekstern API-adgang til den danske portal for offentlige indkøb
+    version: 'v1'
+    description: |-
+        Eksterne brugere godkendt af Konkurrence- og forbrugerstyrelsen (KFST) kan foretage følgende handlinger via API:
+
+        MU_API_DATASYNK – Hent data fra udbud.dk:
+        - Hent en enkel bekendtgørelse
+        - Hent flere bekendtgørelser baseret på kilde og tidspunkt
+
+        MU_API_PUBLICERING – Send data til udbud.dk:
+        - Validere en bekendtgørelse
+        - Publicere en bekendtgørelse
+
+        Detaljer om de enkelte API'er findes nedenfor.
+
+        For at få en bruger som er i stand til at foretage handlinger, udfyld denne formular: https://blanket.virk.dk/blanketafvikler/orbeon/fr/nem_v/6_958a53e2132ec8a1a825dee2b9a4730a7c9c61ac/new (kræver en MitID Erhverv-bruger).
+
+        Afvent derefter dine loginoplysninger - brugernavn og adgangskode til din basic auth-bruger.
+
+        Alle de tilgængelige endepunkter er beskyttet med OIDC, hvorfor en access token er behøvet til Bearer authentication.
+
+        For at få din access token, venligst kald følgende API:
+        - URL, DEMO: https://erstpreprod.virk.dk/auth/token?grant_type=client_credentials
+        - URL, PROD: https://erst.virk.dk/auth/token?grant_type=client_credentials
+        - HTTP method: POST
+        - Security: Basic auth; dine loginoplysninger
+
+        Venligst benyt din udstedte access token til alle API-kald.
+        Din tokens gyldighed er angivet i JWT'en du får tilbage. Brug enten "expires_in" fra POST requestet eller "exp" værdien i JWT'en i får udstedt.
+
+        Alle endepunkter kræver specifikt input og leverer et specifikt output - enten et positivt respons eller en fejl.
+        De forskellige svar er dokumenteret på de specifikke endepunkter nedenfor.
+
+        Det anbefales, at man validerer sin bekendtgørelse, inden man publicerer, idet kun dette endepunkt returnerer en valideringsrapport.
+
+        Det anbefales, at man henter bekendtgørelser med minimum en times mellemrum.
+
+        Nedenstående valideringer foretages via eforms-sdk-dk, som er offentligt tilgængeligt på dette repository,
+        hvor man altid kan finde de gældende danske valideringsregler, oversættelser osv.
+
+        I forbindelse med spørgsmål bedes der rettes henvendelse til system@udbud.dk.
+
+servers:
+    - url: https://api-demo.udbud.dk/udbud
+      description: Demoserver
+    - url: https://api.udbud.dk/udbud
+      description: Produktionsserver
+paths:
+    /ekstern-data/bekendtgoerelse/v1/{sdkVersion}/valider:
+        post:
+            tags:
+                - Valider og publicer
+            summary: Validerer en bekendtgørelse.
+            description: |
+                Bemærk at den angivne SDK-version skal matche SDK-versionen i XML'en. Gyldigt SDK: eforms-sdk-dk-1.13.0-0.1.21.
+                Returnerer en (eventuel tom) liste af schematronfejl samt et (eventuelt ikke-eksisterende) XSD-fejl-objekt.
+                Benyttes af eksterne systemer, som behøver en af Erhvervsstyrelsen tildelt rolle for at kalde endepunktet.
+            operationId: valider
+            parameters:
+                -   name: sdkVersion
+                    in: path
+                    required: true
+                    schema:
+                      type: string
+                    example: eforms-sdk-dk-1.13.0
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/EksternBekendtgoerelseRequestDto'
+                required: true
+            responses:
+                '200':
+                    description: Validering lykkedes, se svar for detaljer.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ValideringResultatDto'
+                '401':
+                    description: Kan kun kaldes af en indlogget bruger
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApiError'
+                            example:
+                                status: 401 UNAUTHORIZED
+                                timestamp: 26-08-2024 14:04:20
+                '403':
+                    description: 'KrÃ¦ver rolle: ''MU_API_PUBLICERING'', ''MU_API_VALIDERING'''
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApiError'
+                            example:
+                                status: 403 FORBIDDEN
+                                timestamp: 26-08-2024 14:04:20
+                '409':
+                    description: Kunne ikke validere pga. en eller flere fejl.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApiError'
+                '500':
+                    description: Uventet fejl
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApiError'
+                            example:
+                                requestId: DF733B2625F3B4BF2392033D3C02D084
+                                status: 500 INTERNAL_SERVER_ERROR
+                                timestamp: 26-08-2024 14:04:20
+                                message: Ekstern komponent svarer ikke
+                                debugMessage: stacktrace...
+            security:
+                - bearer: []
+    /ekstern-data/bekendtgoerelse/v1/{sdkVersion}/publicer:
+        post:
+            tags:
+                - Valider og publicer
+            summary: Publicerer en bekendtgørelse og ingester den i Elastic.
+            description: |
+                Bemærk at den angivne SDK-version skal matche SDK-versionen i XML'en. Gyldigt SDK: eforms-sdk-dk-1.13.0-0.1.21.
+                Fejler publiceringen grundet schematronfejl eller XSD-fejl, skal valideringsendepunktet kaldes for at se disse.
+                Benyttes af eksterne systemer, som behøver en af Erhvervsstyrelsen tildelt rolle for at kalde endepunktet.
+            operationId: publicer
+            parameters:
+                -   name: sdkVersion
+                    in: path
+                    required: true
+                    schema:
+                      type: string
+                    example: eforms-sdk-dk-1.13.0
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/EksternBekendtgoerelseRequestDto'
+                required: true
+            responses:
+                '201':
+                    description: Publiceret uden fejl.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PubliceringResultat'
+                '401':
+                    description: Kan kun kaldes af en indlogget bruger
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApiError'
+                            example:
+                                status: 401 UNAUTHORIZED
+                                timestamp: 26-08-2024 14:04:20
+                '403':
+                    description: 'KrÃ¦ver rolle: ''MU_API_PUBLICERING'''
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApiError'
+                            example:
+                                status: 403 FORBIDDEN
+                                timestamp: 26-08-2024 14:04:20
+                '409':
+                    description: Kunne ikke publicere pga. en eller flere fejl.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApiError'
+                '500':
+                    description: Uventet fejl
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApiError'
+                            example:
+                                requestId: DF733B2625F3B4BF2392033D3C02D084
+                                status: 500 INTERNAL_SERVER_ERROR
+                                timestamp: 26-08-2024 14:04:20
+                                message: Ekstern komponent svarer ikke
+                                debugMessage: stacktrace...
+            security:
+                - bearer: []
+    /ekstern-data/bekendtgoerelse/v1/{noticeId}/{noticeVersion}:
+        get:
+            tags:
+                - Hent data
+            summary: |
+                Henter en specifik bekendtgoerelse ud fra noticeId, noticeVersion og potentielt noticePublicationNumber
+            description: |
+                Benyttes af eksterne systemer, som behøver en af Erhvervsstyrelsen tildelt rolle for at kalde endepunktet.
+            operationId: hentSpecifik
+            parameters:
+                -   name: noticeId
+                    in: path
+                    description: NoticeID for bekendtgørelsen
+                    required: true
+                    schema:
+                        type: string
+                    example: 6a26cc22-a211-41ea-867f-c34b4d726154
+                -   name: noticeVersion
+                    in: path
+                    description: NoticeVersion for bekendtgørelsen
+                    required: true
+                    schema:
+                        type: string
+                    example: '01'
+                -   name: noticePublicationNumber
+                    in: query
+                    description: NoticePublicationNumber for bekendtgørelsen
+                    required: false
+                    schema:
+                        type: string
+                    example: 00258225-2024
+            responses:
+                '200':
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/BekendtgoerelseContainerDTO'
+                '400':
+                    description: noticeid er påkrævet
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApiError'
+                '401':
+                    description: Kan kun kaldes af en indlogget bruger
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApiError'
+                            example:
+                                status: 401 UNAUTHORIZED
+                                timestamp: 26-08-2024 14:04:21
+                '403':
+                    description: 'KrÃ¦ver rolle: ''MU_API_DATASYNK'''
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApiError'
+                            example:
+                                status: 403 FORBIDDEN
+                                timestamp: 26-08-2024 14:04:21
+                '500':
+                    description: Uventet fejl
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApiError'
+                            example:
+                                requestId: DF733B2625F3B4BF2392033D3C02D084
+                                status: 500 INTERNAL_SERVER_ERROR
+                                timestamp: 26-08-2024 14:04:21
+                                message: Ekstern komponent svarer ikke
+                                debugMessage: stacktrace...
+            security:
+                -   bearer: [ ]
+    /ekstern-data/bekendtgoerelse/v1/fraKilde/{kilde}:
+        get:
+            tags:
+                - Hent data
+            summary: |
+                Henter alle bekendtgørelser i systemet fra en kilde, e.g. TED.
+            description: |
+                Kan filtrere på tid angivet som ISO Date Time - løsningen sætter tidszone til "Europe/Copenhagen", hvorfor den skal undlades. Angives tid, hentes alle bekendtgørelser lagt i databasen efter det angivne tidspunkt. Benyttes af eksterne systemer, som behøver en af Erhvervsstyrelsen tildelt rolle for at kalde endepunktet.
+            operationId: hentAlleFraKilde
+            parameters:
+                -   name: kilde
+                    in: path
+                    required: true
+                    schema:
+                        type: string
+                        enum:
+                            - TED
+                            - DKUDBUD
+                            - ALLE
+                    example: DKUDBUD
+                -   name: page
+                    in: query
+                    required: false
+                    schema:
+                        minimum: 1
+                        type: integer
+                        format: int32
+                    example: 1
+                -   name: size
+                    in: query
+                    required: false
+                    schema:
+                        minimum: 1
+                        type: integer
+                        format: int32
+                    example: 100
+                -   name: since
+                    in: query
+                    required: false
+                    schema:
+                        type: string
+                        format: date-time
+                    example: '2024-06-05T12:00:00'
+            responses:
+                '200':
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/BekendtgoerelseContainerListDTO'
+                '400':
+                    description: Ugyldige parametre, se fejlbesked.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApiError'
+                '401':
+                    description: Kan kun kaldes af en indlogget bruger
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApiError'
+                            example:
+                                status: 401 UNAUTHORIZED
+                                timestamp: 26-08-2024 14:04:21
+                '403':
+                    description: 'KrÃ¦ver rolle: ''MU_API_DATASYNK'''
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApiError'
+                            example:
+                                status: 403 FORBIDDEN
+                                timestamp: 26-08-2024 14:04:21
+                '416':
+                    description: Forsøg på hentning af side, der ikke findes.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApiError'
+                '500':
+                    description: Uventet fejl
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApiError'
+                            example:
+                                requestId: DF733B2625F3B4BF2392033D3C02D084
+                                status: 500 INTERNAL_SERVER_ERROR
+                                timestamp: 26-08-2024 14:04:21
+                                message: Ekstern komponent svarer ikke
+                                debugMessage: stacktrace...
+            security:
+                -   bearer: [ ]
+
+components:
+    schemas:
+        VisualModelNode:
+            type: object
+            properties:
+                contentId:
+                    type: string
+                    description: ID'et pÃ¥ indholdet, er ens med id'et fra fields.json
+                    example: BT-262-Lot
+                contentType:
+                    type: string
+                    description: Typen af indhold, er enten 'field' eller 'group'
+                    example: field
+                contentCount:
+                    type: string
+                    description: Tal der unit identificerer hvilken gentagelse dette content hÃ¸rer til.
+                    example: '1'
+                sdkVersion:
+                    type: string
+                    description: Versionen af eforms-sdk/mitudbud-sdk som denne visualmodel tilhÃ¸rer, findes kun pÃ¥ roden.
+                    example: eforms-sdk-dk-1.10.3
+                noticeSubType:
+                    type: string
+                    description: BekendtgÃ¸relsestypen som denne visualmodelnode er en del af, findes kun pÃ¥ roden.
+                    example: DKE3
+                noticeUuid:
+                    type: string
+                    description: UUID for denne bekendtgÃ¸relse, har samme vÃ¦rdi som metadata 'BT-701-notice'
+                    example: 314c9538-86c0-40e2-87ed-148fb6016196
+                children:
+                    type: array
+                    description: Hvis denne knude er en 'group', sÃ¥ kan den have bÃ¸rn.
+                    items:
+                        $ref: '#/components/schemas/VisualModelNode'
+                visType:
+                    type: string
+                    description: Typen af indhold, er enten 'field' eller 'group'
+                    example: field
+                visNodeId:
+                    type: string
+                    description: Hvis dette felt er en gruppe, sÃ¥ svarer vÃ¦rdien af visNodeId til id'et pÃ¥ den xmlStructure som den indgÃ¥r i.
+                    example: ND-Lot
+                value:
+                    type: string
+                    description: VÃ¦rdien af denne visualModelNode, kun aktuelt for nodes af typen 'field'
+                    example: '03111900'
+                aendringsbekendtgoerelseSetting:
+                    type: integer
+                    description: Angiver om denne visualmodelnode indgÃ¥r i en Ã¦ndringsbekendtgÃ¸relse, sÃ¦ttes kun i roden.
+                    format: int32
+            description: VisualModelNode er en rekursiv datastruktur som bruges til at opbevare det indtastede data i frontenden samt er datastrukturen som sendes til backenden. Den kan indeholde en liste af VisualModeNode som children. Dette er altid en DAG.
+        ApiError:
+            type: object
+            properties:
+                requestId:
+                    type: string
+                    description: Unikt id per request
+                    example: 9713E8FE956896C3147DFBABB9E24B68
+                status:
+                    type: string
+                    description: HttpStatus kode der vil sendes med response
+                    example: BAD_REQUEST
+                    enum:
+                        - 100 CONTINUE
+                        - 101 SWITCHING_PROTOCOLS
+                        - 102 PROCESSING
+                        - 103 EARLY_HINTS
+                        - 103 CHECKPOINT
+                        - 200 OK
+                        - 201 CREATED
+                        - 202 ACCEPTED
+                        - 203 NON_AUTHORITATIVE_INFORMATION
+                        - 204 NO_CONTENT
+                        - 205 RESET_CONTENT
+                        - 206 PARTIAL_CONTENT
+                        - 207 MULTI_STATUS
+                        - 208 ALREADY_REPORTED
+                        - 226 IM_USED
+                        - 300 MULTIPLE_CHOICES
+                        - 301 MOVED_PERMANENTLY
+                        - 302 FOUND
+                        - 302 MOVED_TEMPORARILY
+                        - 303 SEE_OTHER
+                        - 304 NOT_MODIFIED
+                        - 305 USE_PROXY
+                        - 307 TEMPORARY_REDIRECT
+                        - 308 PERMANENT_REDIRECT
+                        - 400 BAD_REQUEST
+                        - 401 UNAUTHORIZED
+                        - 402 PAYMENT_REQUIRED
+                        - 403 FORBIDDEN
+                        - 404 NOT_FOUND
+                        - 405 METHOD_NOT_ALLOWED
+                        - 406 NOT_ACCEPTABLE
+                        - 407 PROXY_AUTHENTICATION_REQUIRED
+                        - 408 REQUEST_TIMEOUT
+                        - 409 CONFLICT
+                        - 410 GONE
+                        - 411 LENGTH_REQUIRED
+                        - 412 PRECONDITION_FAILED
+                        - 413 PAYLOAD_TOO_LARGE
+                        - 413 REQUEST_ENTITY_TOO_LARGE
+                        - 414 URI_TOO_LONG
+                        - 414 REQUEST_URI_TOO_LONG
+                        - 415 UNSUPPORTED_MEDIA_TYPE
+                        - 416 REQUESTED_RANGE_NOT_SATISFIABLE
+                        - 417 EXPECTATION_FAILED
+                        - 418 I_AM_A_TEAPOT
+                        - 419 INSUFFICIENT_SPACE_ON_RESOURCE
+                        - 420 METHOD_FAILURE
+                        - 421 DESTINATION_LOCKED
+                        - 422 UNPROCESSABLE_ENTITY
+                        - 423 LOCKED
+                        - 424 FAILED_DEPENDENCY
+                        - 425 TOO_EARLY
+                        - 426 UPGRADE_REQUIRED
+                        - 428 PRECONDITION_REQUIRED
+                        - 429 TOO_MANY_REQUESTS
+                        - 431 REQUEST_HEADER_FIELDS_TOO_LARGE
+                        - 451 UNAVAILABLE_FOR_LEGAL_REASONS
+                        - 500 INTERNAL_SERVER_ERROR
+                        - 501 NOT_IMPLEMENTED
+                        - 502 BAD_GATEWAY
+                        - 503 SERVICE_UNAVAILABLE
+                        - 504 GATEWAY_TIMEOUT
+                        - 505 HTTP_VERSION_NOT_SUPPORTED
+                        - 506 VARIANT_ALSO_NEGOTIATES
+                        - 507 INSUFFICIENT_STORAGE
+                        - 508 LOOP_DETECTED
+                        - 509 BANDWIDTH_LIMIT_EXCEEDED
+                        - 510 NOT_EXTENDED
+                        - 511 NETWORK_AUTHENTICATION_REQUIRED
+                timestamp:
+                    type: string
+                    description: tidspunkt for oprettelsen af fejlet
+                    format: date-time
+                message:
+                    type: string
+                    description: Beskrivelse af fejlet
+                    example: Valideringsfejl, se subErrors felt for detailer
+                debugMessage:
+                    type: string
+                    description: Teknisk beskrivelse af fejlet
+                    example: 'Validation failed for argument [0] in public dk.mitudbud.soegning.dto.SoegeresultatDto dk.mitudbud.soegning.controllers.SoegeresultatController.hentSoegeresultater(dk.mitudbud.soegning.dto.SoegningQueryDto) throws java.io.IOException: [Field error in object ''soegningQueryDto'' on field ''pagineringDto.aktuelSide'': rejected value [0]; codes [Min.soegningQueryDto.pagineringDto.aktuelSide,Min.pagineringDto.aktuelSide,Min.aktuelSide,Min.int,Min]; arguments [org.springframework.context.support.DefaultMessageSourceResolvable: codes [soegningQueryDto.pagineringDto.aktuelSide,pagineringDto.aktuelSide]; arguments []; default message [pagineringDto.aktuelSide],1]; default message [aktuelSide skal vare >=1]]'
+                subErrors:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ApiValidationError'
+        ApiValidationError:
+            type: object
+            properties:
+                object:
+                    type: string
+                    description: Objekt der ikke valideres korrekt
+                    example: soegningQueryDto
+                field:
+                    type: string
+                    description: Navn pÃ¥ det felt der ikke valideredes korrekt
+                    example: pagineringDto.aktuelSide
+                rejectedValue:
+                    type: object
+                    description: VÃ¦rdi pÃ¥ feltet der ikke blev godkendt
+                    example: 0
+                message:
+                    type: string
+                    description: Forklarende tekst af fejlet
+                    example: aktuelSide skal vare >=1
+        EksternBekendtgoerelseRequestDto:
+            type: object
+            properties:
+                bekendtgoerelseXmlBase64:
+                    type: string
+                    description: Bekendtgørelses-XML'en encoded i Base64
+                    example: aGVsbG8=
+                language:
+                    type: string
+                    description: Sprog der ønskes valideringsfejlbeskeder på - 'da' eller 'en'. Defaulter til 'da'
+                    example: da
+        SchematronValideringsFejlDto:
+            type: object
+            properties:
+                contentType:
+                    type: string
+                    description: Hvis det er en node eller field
+                    example: node
+                contentId:
+                    type: string
+                    description: Field id som beskriver hvilket felt der er noget galt med
+                    example: BT-262-Lot
+                nodeId:
+                    type: string
+                    description: Node id som beskriver hvilken gruppe der er noget galt med
+                    example: ND-Organizations
+                contentCount:
+                    type: string
+                    description: Gentagelsen af feltet som indeholder fejlen
+                    example: '1'
+                ruleId:
+                    type: string
+                    description: Textnøgle for den specifikke fejl der er sket
+                    example: rule|text|BR-BT-00262-0155
+                errorMessage:
+                    type: string
+                    description: Fejltekst for den specifikke fejl der er sket (dansk eller engelsk)
+                    example: Der er sket en fejl
+                details:
+                    type: string
+                    description: Nogle fejl har detaljer, som kan bruges til yderligere at forstå, hvad der er galt
+                    example: '{"content":[{"content":["cac:TenderSubmissionDeadlinePeriod/cbc:EndDate"],"contentCount":1}],"diagnostic":"ND-LotTenderingProcess_BT-131_d_-Lot","see":"field:BT-131(d)-Lot","contentCount":1}'
+                location:
+                    type: string
+                    description: Placering af fejlen i den fysiske XML-model
+                    example: /cn:ContractNotice/cac:ProcurementProjectLot/cac:TenderingProcess
+            description: Hver SchematronValideringsFejlDto indeholde detailjer om en fejl som er fundt af valideringsmotoren.
+        ValideringResultatDto:
+            type: object
+            properties:
+                success:
+                    type: boolean
+                    description: Hvis validering er udført
+                    example: true
+                schematronValideringsFejlDto:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/SchematronValideringsFejlDto'
+                xsdValidationResult:
+                    $ref: '#/components/schemas/XsdValidationResult'
+        XsdError:
+            type: object
+            properties:
+                lineNumber:
+                    type: integer
+                    description: Linjenummeret i XML'en hvor fejlen er fundet
+                    format: int32
+                    example: 69
+                columnNumber:
+                    type: integer
+                    description: Kolonnen i XML'en hvor fejlen er fundet
+                    format: int32
+                    example: 420
+                message:
+                    type: string
+                    description: Beskrivelse af fejlen
+                    example: 'cvc-datatype-valid.1.2.1: '''' is not a valid value for ''date''.'
+            description: Detailerede info om hver fejl
+        XsdValidationResult:
+            type: object
+            properties:
+                noticeUuid:
+                    type: string
+                    description: UUID pÃ¥ bekendtgÃ¸relsen der er blevet valideret. Metadata 'BT-701-notice'
+                    example: 314c9538-86c0-40e2-87ed-148fb6016196
+                sdkVersioner:
+                    type: string
+                    description: Versionen af SDK som er blevet brugt
+                    example: eforms-sdk-dk-1.13.0
+                    enum:
+                        - eforms-sdk-1.7.4
+                        - eforms-sdk-1.8.3
+                        - eforms-sdk-1.9.3
+                        - eforms-sdk-1.10.2
+                        - eforms-sdk-1.11.0
+                        - eforms-sdk-dk-1.10.6
+                        - eforms-sdk-dk-1.11.0-rc11
+                        - eforms-sdk-1.13.0
+                timestamp:
+                    type: string
+                    description: HvornÃ¥r blev valideringen udfÃ¸rt
+                    format: date-time
+                errorCount:
+                    type: integer
+                    description: Antallet af fejl
+                    format: int32
+                    example: 0
+                xsdErrors:
+                    type: array
+                    description: Detailerede info om hver fejl
+                    items:
+                        $ref: '#/components/schemas/XsdError'
+            description: Indeholder resultaterne fra en XSD validering
+        PubliceringResultat:
+            type: object
+            properties:
+                success:
+                    type: boolean
+                    description: Hvis publicering er udført uden fejl
+                    example: true
+                publiceringstidspunkt:
+                    type: string
+                    description: DKP-012, tidspunktet for publicering
+                    format: date-time
+                    example: '2024-06-05T12:00:00+02:00'
+                noticeId:
+                    type: string
+                    description: BT-701, det givne noticeId
+                    format: uuid
+                    example: abcdef12-4abc-1234-abcd-1234567890ab
+                noticeVersion:
+                    type: string
+                    description: BT-757, den givne noticeVersion
+                    example: '01'
+                noticePublicationNumber:
+                    type: string
+                    description: OPP-010, det givne noticePublicationNumber
+                    example: 00258225-2024
+        BekendtgoerelseContainerDTO:
+            type: object
+            properties:
+                noticeId:
+                    type: string
+                    description: NoticeId for bekendtgoerelsen, modsvarer BT-701 i eForms
+                    example: abcdef12-4abc-1234-abcd-1234567890ab
+                noticeVersion:
+                    type: string
+                    description: NoticeVersion for bekendtgoerelsen, modsvarer BT-757 i eForms
+                    example: '01'
+                noticePublicationNumber:
+                    type: string
+                    description: NoticePublicationNumber for bekendtgoerelsen, modsvarer OPP-010 i eForms
+                    example: 00084632-2024
+                registreringsTidspunkt:
+                    type: string
+                    description: tidspunkt det er oprettet i Udbudsystemet
+                    format: date-time
+                    example: '2024-06-05T12:00:00+02:00'
+                bekendtgoerelseXml:
+                    type: string
+                    description: Base64-UTF8 encoded XML af bekendtgoerelsen
+                    example: I3L2Vmb3Jtcy11YmwtZXh0ZW5zaW9uLWFnZ3JlZ2F0ZS1jb21wb25lbn...
+        BekendtgoerelseContainerListDTO:
+            type: object
+            properties:
+                totalt:
+                    type: integer
+                    description: Antal der totalt findes at hentes, hvis det er flere end er hentet vil det findes mindst en til side. Hvis det skifter mellem hent af sider har det sket en aendring og det rekommenderes at du henter forfra.
+                    format: int64
+                    example: 153
+                bekendtgoerelser:
+                    type: array
+                    description: Alle bekendtgoerelser der er hentet i dette kald
+                    items:
+                        $ref: '#/components/schemas/BekendtgoerelseContainerDTO'
+    securitySchemes:
+        bearer:
+            type: http
+            scheme: bearer
+            bearerFormat: JWT

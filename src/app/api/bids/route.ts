@@ -6,6 +6,7 @@ import { validateFile } from '@/lib/storage'
 import { uploadDocument, deleteFile } from '@/lib/storage/server'
 import { json, badRequest, unauthorized, internal } from '@/lib/http'
 import type { Database } from '@/lib/supabase/types'
+import { logAction } from '@/lib/audit'
 
 type BidsInsert = Database['public']['Tables']['bids']['Insert']
 
@@ -131,6 +132,8 @@ export async function POST(request: NextRequest) {
       console.error('Error creating bid:', bidError)
       return internal('Kunne ikke oprette bud. Prøv igen.')
     }
+
+    await logAction(user.id, 'bid.submitted', 'tender', tenderId, { bid_id: bidData.id, amount: priceNum, currency })
 
     return json({
       id: bidData.id,

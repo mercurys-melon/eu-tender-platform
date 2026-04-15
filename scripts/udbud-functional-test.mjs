@@ -12,7 +12,7 @@ import { writeFileSync, mkdirSync, existsSync, readFileSync as readFile, readdir
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readFileSync } from 'node:fs'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 import { spawn } from 'node:child_process'
 import readline from 'node:readline'
@@ -536,6 +536,20 @@ async function getAccessTokenAndRun() {
     const summaryFile = join(REPORT_DIR, 'summary.md')
     writeFileSync(summaryFile, summary, 'utf-8')
     
+    // Generate and save XML payload to disk before authentication — independent of access token
+    const xmlOutputDir = join(__dirname, 'output')
+    mkdirSync(xmlOutputDir, { recursive: true })
+    const xmlOutputFile = join(xmlOutputDir, 'notice-payload.xml')
+    const issueDate = new Date().toISOString().slice(0, 10)
+    const previewNoticeId = randomUUID()
+    const previewFolderId = randomUUID()
+    console.log(`💾 Preview notice ID (DKE3): ${previewNoticeId}`)
+    const xmlContent = env.UDBUD_BEKENDTGOERELSE_XML_BASE64
+      ? Buffer.from(env.UDBUD_BEKENDTGOERELSE_XML_BASE64, 'base64').toString('utf-8')
+      : buildDKE3Xml(issueDate, previewNoticeId, previewFolderId)
+    writeFileSync(xmlOutputFile, xmlContent, 'utf-8')
+    console.log(`💾 XML payload gemt: ${xmlOutputFile}`)
+
     const tokenData = await getAccessToken(basicUser, basicPass, TOKEN_URL)
     logProgress('GOT_TOKEN')
     
@@ -656,6 +670,243 @@ async function getAccessToken(basicUser, basicPass, tokenUrl) {
 }
 
 /**
+ * Schematron-compliant eForms XML for DKE0 (Forventet indkøb).
+ * Source: notice-types.json → documentType: "PIN", legalBasis: "32014L0024", formType: "preplanning"
+ * Root element: PriorInformationNotice (UBL PIN namespace).
+ *
+ * Schematron constraints enforced (stage-1b / stage-2a DKE0):
+ *   REQUIRED: NoticeSubType, Organizations/Organization/Company, ContractingParty/Party,
+ *             exactly 1 ProcurementProjectLot[@schemeName='Part'], IssueDate, IssueTime,
+ *             NoticeTypeCode, NoticeLanguageCode, VersionID, UBLVersionID, CustomizationID
+ *   FORBIDDEN: ContractFolderID, RegulatoryDomain, root-level ProcurementProject,
+ *              root-level TenderingProcess, TenderingTerms/TendererQualificationRequest
+ *
+ * Organisation address (BT-501/507/510/512/513) lives in efac:Organizations, not ContractingParty/Party.
+ * BT-127 (planned publication date) goes inside the Part's TenderingProcess.
+ * CVR placeholder: 25050053. No secrets included.
+ */
+function buildDKE0Xml(issueDate, noticeId) {
+  const d = new Date(issueDate)
+  d.setMonth(d.getMonth() + 3)
+  const plannedDate = d.toISOString().slice(0, 10)
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<PriorInformationNotice xmlns="urn:oasis:names:specification:ubl:schema:xsd:PriorInformationNotice-2"
+  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
+  xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
+  xmlns:efext="http://data.europa.eu/p27/eforms-ubl-extensions/1"
+  xmlns:efac="http://data.europa.eu/p27/eforms-ubl-extension-aggregate-components/1"
+  xmlns:efbc="http://data.europa.eu/p27/eforms-ubl-extension-basic-components/1">
+  <ext:UBLExtensions>
+    <ext:UBLExtension>
+      <ext:ExtensionContent>
+        <efext:EformsExtension>
+          <efac:NoticeSubType>
+            <cbc:SubTypeCode listName="notice-subtype">DKE0</cbc:SubTypeCode>
+          </efac:NoticeSubType>
+          <efac:Organizations>
+            <efac:Organization>
+              <efac:Company>
+                <cac:PartyIdentification>
+                  <cbc:ID schemeName="organization">ORG-0001</cbc:ID>
+                </cac:PartyIdentification>
+                <cac:PartyName>
+                  <cbc:Name languageID="DAN">Demo Ordregivende Myndighed</cbc:Name>
+                </cac:PartyName>
+                <cac:PostalAddress>
+                  <cbc:StreetName>Testvej 1</cbc:StreetName>
+                  <cbc:PostalZone>1234</cbc:PostalZone>
+                  <cbc:CityName>Testby</cbc:CityName>
+                  <cbc:CountrySubentityCode listName="nuts">DK011</cbc:CountrySubentityCode>
+                  <cac:Country>
+                    <cbc:IdentificationCode listName="country">DNK</cbc:IdentificationCode>
+                  </cac:Country>
+                </cac:PostalAddress>
+                <cac:PartyLegalEntity>
+                  <cbc:CompanyID schemeName="CVR">25050053</cbc:CompanyID>
+                </cac:PartyLegalEntity>
+              </efac:Company>
+            </efac:Organization>
+          </efac:Organizations>
+        </efext:EformsExtension>
+      </ext:ExtensionContent>
+    </ext:UBLExtension>
+  </ext:UBLExtensions>
+  <cbc:UBLVersionID>2.3</cbc:UBLVersionID>
+  <cbc:CustomizationID>eforms-sdk-dk-1.13.0-1.3.0</cbc:CustomizationID>
+  <cbc:ID schemeName="notice-id">${noticeId}</cbc:ID>
+  <cbc:IssueDate>${issueDate}</cbc:IssueDate>
+  <cbc:IssueTime>12:00:00</cbc:IssueTime>
+  <cbc:NoticeTypeCode listName="preplanning">pin-only</cbc:NoticeTypeCode>
+  <cbc:NoticeLanguageCode>DAN</cbc:NoticeLanguageCode>
+  <cbc:VersionID>01</cbc:VersionID>
+  <cbc:PlannedDate>${plannedDate}+02:00</cbc:PlannedDate>
+  <cac:ContractingParty>
+    <cac:ContractingActivity>
+      <cbc:ActivityTypeCode listName="authority-activity">gen-pub</cbc:ActivityTypeCode>
+    </cac:ContractingActivity>
+    <cac:ContractingPartyType>
+      <cbc:PartyTypeCode listName="buyer-legal-type">body-pl</cbc:PartyTypeCode>
+    </cac:ContractingPartyType>
+    <cac:Party>
+      <cac:PartyIdentification>
+        <cbc:ID schemeName="organization">ORG-0001</cbc:ID>
+      </cac:PartyIdentification>
+    </cac:Party>
+  </cac:ContractingParty>
+  <cac:ProcurementProjectLot>
+    <cbc:ID schemeName="Part">PAR-0001</cbc:ID>
+    <cac:ProcurementProject>
+      <cbc:Name languageID="DAN">Del 1 - Funktionstest DKE0 Forventet indkøb</cbc:Name>
+      <cbc:Description languageID="DAN">Funktionstest af API-integration for DKE0 forventet indkøb</cbc:Description>
+      <cbc:ProcurementTypeCode listName="contract-nature">services</cbc:ProcurementTypeCode>
+      <cac:MainCommodityClassification>
+        <cbc:ItemClassificationCode listName="cpv">79000000</cbc:ItemClassificationCode>
+      </cac:MainCommodityClassification>
+      <cac:RequestedTenderTotal>
+        <cbc:EstimatedOverallContractAmount currencyID="DKK">100000</cbc:EstimatedOverallContractAmount>
+      </cac:RequestedTenderTotal>
+    </cac:ProcurementProject>
+  </cac:ProcurementProjectLot>
+</PriorInformationNotice>`
+}
+
+/**
+ * Schematron-compliant eForms XML for DKE3 (Annoncering under tærskelværdien).
+ * Source: notice-types.json → documentType: "CN", legalBasis: "other", formType: "competition"
+ * Root element: ContractNotice (UBL CN namespace).
+ *
+ * Schematron constraints enforced (stage-1b / stage-2a DKE3):
+ *   REQUIRED: NoticeSubType, Organizations/Organization/Company, ContractingParty/Party (org ref),
+ *             RegulatoryDomain, ContractFolderID, IssueDate, IssueTime, NoticeTypeCode,
+ *             NoticeLanguageCode, VersionID, UBLVersionID, CustomizationID,
+ *             ProcurementProject (root, with Name/Description/ProcurementTypeCode/CPV),
+ *             at least 1 ProcurementProjectLot[@schemeName='Lot'] with Name/Description/CPV/EstimatedValue
+ *   FORBIDDEN: PlannedDate (BT-127), ProcurementProjectLot[@schemeName='Part']
+ *
+ * RegulatoryDomain codes (legal-basis-dk.gc): other-goi | other-vol | other-tbl.
+ * CPV placeholder: 79000000 (Business services). CVR placeholder: 25050053. No secrets included.
+ */
+function buildDKE3Xml(issueDate, noticeId, folderId) {
+  const deadlineDate = new Date(new Date(issueDate).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<ContractNotice xmlns="urn:oasis:names:specification:ubl:schema:xsd:ContractNotice-2"
+  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
+  xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
+  xmlns:efext="http://data.europa.eu/p27/eforms-ubl-extensions/1"
+  xmlns:efac="http://data.europa.eu/p27/eforms-ubl-extension-aggregate-components/1"
+  xmlns:efbc="http://data.europa.eu/p27/eforms-ubl-extension-basic-components/1">
+  <ext:UBLExtensions>
+    <ext:UBLExtension>
+      <ext:ExtensionContent>
+        <efext:EformsExtension>
+          <efac:NoticeSubType>
+            <cbc:SubTypeCode listName="notice-subtype">DKE3</cbc:SubTypeCode>
+          </efac:NoticeSubType>
+          <efac:Organizations>
+            <efac:Organization>
+              <efac:Company>
+                <cac:PartyIdentification>
+                  <cbc:ID schemeName="organization">ORG-0001</cbc:ID>
+                </cac:PartyIdentification>
+                <cac:PartyName>
+                  <cbc:Name languageID="DAN">Demo Ordregivende Myndighed</cbc:Name>
+                </cac:PartyName>
+                <cac:PostalAddress>
+                  <cbc:StreetName>Testvej 1</cbc:StreetName>
+                  <cbc:PostalZone>1234</cbc:PostalZone>
+                  <cbc:CityName>Testby</cbc:CityName>
+                  <cbc:CountrySubentityCode listName="nuts">DK011</cbc:CountrySubentityCode>
+                  <cac:Country>
+                    <cbc:IdentificationCode listName="country">DNK</cbc:IdentificationCode>
+                  </cac:Country>
+                </cac:PostalAddress>
+                <cac:PartyLegalEntity>
+                  <cbc:CompanyID schemeName="CVR">25050053</cbc:CompanyID>
+                </cac:PartyLegalEntity>
+              </efac:Company>
+            </efac:Organization>
+          </efac:Organizations>
+        </efext:EformsExtension>
+      </ext:ExtensionContent>
+    </ext:UBLExtension>
+  </ext:UBLExtensions>
+  <cbc:UBLVersionID>2.3</cbc:UBLVersionID>
+  <cbc:CustomizationID>eforms-sdk-dk-1.13.0-1.3.0</cbc:CustomizationID>
+  <cbc:ID schemeName="notice-id">${noticeId}</cbc:ID>
+  <cbc:ContractFolderID>${folderId}</cbc:ContractFolderID>
+  <cbc:IssueDate>${issueDate}</cbc:IssueDate>
+  <cbc:IssueTime>12:00:00</cbc:IssueTime>
+  <cbc:NoticeTypeCode listName="competition">cn-standard</cbc:NoticeTypeCode>
+  <cbc:NoticeLanguageCode>DAN</cbc:NoticeLanguageCode>
+  <cbc:VersionID>01</cbc:VersionID>
+  <cbc:RegulatoryDomain>other-vol</cbc:RegulatoryDomain>
+  <cac:ContractingParty>
+    <cac:ContractingActivity>
+      <cbc:ActivityTypeCode listName="authority-activity">gen-pub</cbc:ActivityTypeCode>
+    </cac:ContractingActivity>
+    <cac:ContractingPartyType>
+      <cbc:PartyTypeCode listName="buyer-legal-type">body-pl</cbc:PartyTypeCode>
+    </cac:ContractingPartyType>
+    <cac:Party>
+      <cac:PartyIdentification>
+        <cbc:ID schemeName="organization">ORG-0001</cbc:ID>
+      </cac:PartyIdentification>
+    </cac:Party>
+  </cac:ContractingParty>
+  <cac:ProcurementProject>
+    <cbc:Name languageID="DAN">Funktionstest - DKE3 Annoncering under tærskelværdien</cbc:Name>
+    <cbc:Description languageID="DAN">Funktionstest af API-integration for DKE3 annoncering under tærskelværdien</cbc:Description>
+    <cbc:ProcurementTypeCode listName="contract-nature">services</cbc:ProcurementTypeCode>
+    <cac:MainCommodityClassification>
+      <cbc:ItemClassificationCode listName="cpv">79000000</cbc:ItemClassificationCode>
+    </cac:MainCommodityClassification>
+    <cac:RequestedTenderTotal>
+      <cbc:EstimatedOverallContractAmount currencyID="DKK">100000</cbc:EstimatedOverallContractAmount>
+    </cac:RequestedTenderTotal>
+    <cac:RealizedLocation>
+      <cac:Address>
+        <cbc:Region>anyw-cou</cbc:Region>
+        <cac:Country>
+          <cbc:IdentificationCode listName="country">DNK</cbc:IdentificationCode>
+        </cac:Country>
+      </cac:Address>
+    </cac:RealizedLocation>
+  </cac:ProcurementProject>
+  <cac:ProcurementProjectLot>
+    <cbc:ID schemeName="Lot">LOT-0001</cbc:ID>
+    <cac:TenderingProcess>
+      <cbc:ProcedureCode listName="procurement-procedure-type">open</cbc:ProcedureCode>
+      <cac:TenderSubmissionDeadlinePeriod>
+        <cbc:EndDate>${deadlineDate}+02:00</cbc:EndDate>
+        <cbc:EndTime>12:00:00+02:00</cbc:EndTime>
+      </cac:TenderSubmissionDeadlinePeriod>
+    </cac:TenderingProcess>
+    <cac:ProcurementProject>
+      <cbc:Name languageID="DAN">Lot 1 - Funktionstest DKE3</cbc:Name>
+      <cbc:Description languageID="DAN">Lot 1 - Funktionstest af DKE3 API-integration</cbc:Description>
+      <cbc:ProcurementTypeCode listName="contract-nature">services</cbc:ProcurementTypeCode>
+      <cac:MainCommodityClassification>
+        <cbc:ItemClassificationCode listName="cpv">79000000</cbc:ItemClassificationCode>
+      </cac:MainCommodityClassification>
+      <cac:RequestedTenderTotal>
+        <cbc:EstimatedOverallContractAmount currencyID="DKK">100000</cbc:EstimatedOverallContractAmount>
+      </cac:RequestedTenderTotal>
+      <cac:RealizedLocation>
+        <cac:Address>
+          <cbc:Region>anyw-cou</cbc:Region>
+          <cac:Country>
+            <cbc:IdentificationCode listName="country">DNK</cbc:IdentificationCode>
+          </cac:Country>
+        </cac:Address>
+      </cac:RealizedLocation>
+    </cac:ProcurementProject>
+  </cac:ProcurementProjectLot>
+</ContractNotice>`
+}
+
+/**
  * Initialize configuration and run tests
  * This function is called after access token is obtained
  */
@@ -679,8 +930,8 @@ async function initializeAndRun(accessToken, tokenExpiresIn = null) {
     const rawCandidates = SDK_VERSION_AUTO_CANDIDATES
     const expandedCandidates = []
     for (const raw of rawCandidates) {
-      expandedCandidates.push(raw)
       expandedCandidates.push(`eforms-sdk-dk-${raw}`)
+      expandedCandidates.push(raw)
     }
     expandedCandidates.push('eforms-sdk-dk-1.13.0', 'eforms-sdk-dk-1.11.0')
     const discoveryPayload = {
@@ -699,6 +950,7 @@ async function initializeAndRun(accessToken, tokenExpiresIn = null) {
       threshold_value: 750000,
       justification: 'Udbud under tærskelværdi - test formål',
     }
+    let selectedReason = ''
     for (const candidate of expandedCandidates) {
       const url = `${API_BASE_URL}/ekstern-data/bekendtgoerelse/v1/${candidate}/valider`
       let status = ''
@@ -712,28 +964,40 @@ async function initializeAndRun(accessToken, tokenExpiresIn = null) {
         status = String(res.status)
         const data = await res.json().catch(() => ({}))
         message = data.message ?? data.Message ?? data.debugMessage ?? data.debug_message ?? res.statusText ?? ''
-        const is5xx = res.status >= 500 && res.status < 600
-        const is409Unsupported = res.status === 409 && (String(message).includes(SDK_409_UNSUPPORTED))
-        const isSupported = res.ok || (res.status === 400 || res.status === 422) && (data != null && typeof data === 'object' && !Array.isArray(data))
-        if (is5xx) {
-          sdkAutoTable.push({ version: candidate, status: res.status, message: (message || '') + (message ? ' ' : '') + '(inconclusive)' })
-          continue
-        }
+        const is409Unsupported = res.status === 409 && String(message).includes(SDK_409_UNSUPPORTED)
+        const isPass = res.ok // 2xx
+        const isPayloadIssue = res.status === 500 || res.status === 400
         if (is409Unsupported) {
-          sdkAutoTable.push({ version: candidate, status: res.status, message: message || (res.ok ? 'OK' : '') })
+          const reason = 'SKIP - SDK-version ikke understøttet'
+          console.log(`Version probe: ${candidate} → ${res.status} (${reason})`)
+          sdkAutoTable.push({ version: candidate, status: res.status, message: message || '', reason })
           continue
         }
-        if (isSupported) {
-          sdkAutoTable.push({ version: candidate, status: res.status, message: message || (res.ok ? 'OK' : '') })
+        if (isPass) {
+          const reason = 'PASS'
+          console.log(`Version probe: ${candidate} → ${res.status} (${reason})`)
+          sdkAutoTable.push({ version: candidate, status: res.status, message: message || 'OK', reason })
           SDK_VERSION = candidate
+          selectedReason = reason
           break
         }
-        sdkAutoTable.push({ version: candidate, status: res.status, message: message || '' })
+        if (isPayloadIssue) {
+          const reason = 'accepted, payload issue'
+          console.log(`Version probe: ${candidate} → ${res.status} (${reason})`)
+          sdkAutoTable.push({ version: candidate, status: res.status, message: message || '', reason })
+          SDK_VERSION = candidate
+          selectedReason = reason
+          break
+        }
+        const reason = 'skipped'
+        console.log(`Version probe: ${candidate} → ${res.status} (${reason})`)
+        sdkAutoTable.push({ version: candidate, status: res.status, message: message || '', reason })
         continue
       } catch (err) {
         status = 'error'
         message = err.message || ''
-        sdkAutoTable.push({ version: candidate, status: 'error', message: message })
+        console.log(`Version probe: ${candidate} → error (${message.slice(0, 60)})`)
+        sdkAutoTable.push({ version: candidate, status: 'error', message: message, reason: 'error' })
         continue
       }
     }
@@ -749,19 +1013,19 @@ async function initializeAndRun(accessToken, tokenExpiresIn = null) {
       writeFileSync(summaryFile, summary, 'utf-8')
       process.exit(1)
     }
-    console.log('Selected sdkVersion:', SDK_VERSION)
+    console.log(`Selected sdkVersion: ${SDK_VERSION} (${selectedReason})`)
     console.log('SDK version (auto) tried:')
-    console.log('| Version       | Status | Message |')
-    console.log('|---------------|--------|--------|')
+    console.log('| Version       | Status | Reason                          |')
+    console.log('|---------------|--------|---------------------------------|')
     for (const row of sdkAutoTable) {
-      const msg = (row.message || '').replace(/\n/g, ' ').slice(0, 60)
-      console.log(`| ${row.version.padEnd(13)} | ${String(row.status).padEnd(6)} | ${msg} |`)
+      const reason = (row.reason || '').slice(0, 32)
+      console.log(`| ${row.version.padEnd(13)} | ${String(row.status).padEnd(6)} | ${reason} |`)
     }
     const summaryFile = join(REPORT_DIR, 'summary.md')
     let summary = existsSync(summaryFile) ? readFileSync(summaryFile, 'utf-8') : ''
-    summary += `\n## SDK version (auto)\n\n**Selected sdkVersion:** ${SDK_VERSION}\n\n| Version | Status | Message |\n|---------|--------|--------|\n`
+    summary += `\n## SDK version (auto)\n\n**Selected sdkVersion:** ${SDK_VERSION} (${selectedReason})\n\n| Version | Status | Reason | Message |\n|---------|--------|--------|---------|\n`
     for (const row of sdkAutoTable) {
-      summary += `| ${row.version} | ${row.status} | ${(row.message || '').replace(/\|/g, ' ').replace(/\n/g, ' ').slice(0, 80)} |\n`
+      summary += `| ${row.version} | ${row.status} | ${(row.reason || '').replace(/\|/g, ' ')} | ${(row.message || '').replace(/\|/g, ' ').replace(/\n/g, ' ').slice(0, 80)} |\n`
     }
     summary += '\n'
     writeFileSync(summaryFile, summary, 'utf-8')
@@ -967,8 +1231,8 @@ async function initializeAndRun(accessToken, tokenExpiresIn = null) {
       return { ok: false, error: `Base64 decode fejlede: ${e.message}` }
     }
     const len = decoded.length
-    const snippet = decoded.slice(0, 120).replace(/[\r\n]/g, ' ')
-    console.log(`   📋 bekendtgoerelseXmlBase64: decoded length=${len}, snippet: ${snippet}${len > 120 ? '...' : ''}`)
+    const snippet = decoded.slice(0, 200).replace(/[\r\n]/g, ' ')
+    console.log(`   📋 bekendtgoerelseXmlBase64: decoded length=${len}, snippet: ${snippet}${len > 200 ? '...' : ''}`)
     if (!decoded.startsWith('<')) {
       return { ok: false, error: `XML sanity fail: output starter ikke med <. decoded length=${len}` }
     }
@@ -997,68 +1261,46 @@ async function initializeAndRun(accessToken, tokenExpiresIn = null) {
     process.exit(1)
   }
 
-  /**
-   * Payload template for "Udbud under tærskelværdi" (Krav 1.1)
-   * 
-   * Forskelle fra "Forventet indkøb":
-   * - estimated_value skal være under tærskelværdi (typisk < 750.000 DKK for offentlige indkøb)
-   * - type: "below_threshold"
-   * - notification_type: "below_threshold_notice"
-   */
-  function createBelowThresholdPayload() {
-  const base = {
-    title: 'Udbud under tærskelværdi - Funktionsmæssig test',
-    description: 'Dette er et test-udbud under tærskelværdi oprettet som del af funktioneltesten. Udbuddet skal kun bruges til testformål.',
-    category: 'IT Services',
-    estimated_value: 500000, // Under tærskelværdi (750.000 DKK)
-    currency: 'DKK',
-    submission_deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 dage fra nu
-    publication_date: new Date().toISOString(),
-    entity_id: 'test-entity-123',
-    espd_required: false, // Typisk ikke påkrævet for udbud under tærskelværdi
-    status: 'draft',
-    type: 'below_threshold',
-    notification_type: 'below_threshold_notice',
-    // Yderligere felter specifikke for udbud under tærskelværdi
-    threshold_value: 750000,
-    justification: 'Udbud under tærskelværdi - test formål',
-  }
-  const xmlBase64 = env.UDBUD_BEKENDTGOERELSE_XML_BASE64
-  if (xmlBase64) base.bekendtgoerelseXmlBase64 = xmlBase64
-  return base
+  /** Write payload type + XML length to summary.md */
+  function writePayloadInfo(noticeSubType, xmlLen) {
+    const summaryFile = join(REPORT_DIR, 'summary.md')
+    let summary = existsSync(summaryFile) ? readFileSync(summaryFile, 'utf-8') : ''
+    summary += `\n**Payload type:** ${noticeSubType}, **XML length:** ${xmlLen} chars\n\n`
+    writeFileSync(summaryFile, summary, 'utf-8')
   }
 
   /**
-   * Payload template for "Forventet indkøb" (Krav 1.2)
-   * 
-   * Forskelle fra "Udbud under tærskelværdi":
-   * - estimated_value kan være over eller under tærskelværdi
-   * - type: "expected_procurement"
-   * - notification_type: "prior_information_notice" eller "contract_notice"
-   * - expected_start_date og expected_end_date er typisk påkrævet
+   * Payload for "Annoncering under tærskelværdien" (Krav 1.1) — notice subtype DKE3.
+   * Always includes a minimal structurally valid eForms XML (base64-encoded).
+   * Override with env UDBUD_BEKENDTGOERELSE_XML_BASE64 if needed.
+   */
+  function createBelowThresholdPayload() {
+    const issueDate = new Date().toISOString().slice(0, 10)
+    const noticeId = randomUUID()
+    const folderId = randomUUID()
+    console.log(`   Notice ID (DKE3): ${noticeId}`)
+    console.log(`   Folder ID (DKE3): ${folderId}`)
+    const xmlBase64 = env.UDBUD_BEKENDTGOERELSE_XML_BASE64 || Buffer.from(buildDKE3Xml(issueDate, noticeId, folderId), 'utf-8').toString('base64')
+    const xmlLen = Buffer.from(xmlBase64, 'base64').toString('utf-8').length
+    console.log(`   Payload type: DKE3, XML length: ${xmlLen} chars`)
+    writePayloadInfo('DKE3', xmlLen)
+    return { bekendtgoerelseXmlBase64: xmlBase64, language: 'da' }
+  }
+
+  /**
+   * Payload for "Forventet indkøb" (Krav 1.2) — notice subtype DKE0.
+   * Always includes a minimal structurally valid eForms XML (base64-encoded).
+   * Override with env UDBUD_BEKENDTGOERELSE_XML_BASE64 if needed.
    */
   function createExpectedProcurementPayload() {
-  const base = {
-    title: 'Forventet indkøb - Funktionsmæssig test',
-    description: 'Dette er et test-udbud for forventet indkøb oprettet som del af funktioneltesten. Udbuddet skal kun bruges til testformål.',
-    category: 'IT Services',
-    estimated_value: 1000000, // Kan være over tærskelværdi
-    currency: 'DKK',
-    submission_deadline: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(), // 60 dage fra nu
-    publication_date: new Date().toISOString(),
-    entity_id: 'test-entity-123',
-    espd_required: true, // Typisk påkrævet for forventet indkøb
-    status: 'draft',
-    type: 'expected_procurement',
-    notification_type: 'prior_information_notice',
-    // Yderligere felter specifikke for forventet indkøb
-    expected_start_date: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
-    expected_end_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-    procurement_method: 'open',
-  }
-  const xmlBase64 = env.UDBUD_BEKENDTGOERELSE_XML_BASE64
-  if (xmlBase64) base.bekendtgoerelseXmlBase64 = xmlBase64
-  return base
+    const issueDate = new Date().toISOString().slice(0, 10)
+    const noticeId = randomUUID()
+    console.log(`   Notice ID (DKE0): ${noticeId}`)
+    const xmlBase64 = env.UDBUD_BEKENDTGOERELSE_XML_BASE64 || Buffer.from(buildDKE0Xml(issueDate, noticeId), 'utf-8').toString('base64')
+    const xmlLen = Buffer.from(xmlBase64, 'base64').toString('utf-8').length
+    console.log(`   Payload type: DKE0, XML length: ${xmlLen} chars`)
+    writePayloadInfo('DKE0', xmlLen)
+    return { bekendtgoerelseXmlBase64: xmlBase64, language: 'da' }
   }
 
   /**

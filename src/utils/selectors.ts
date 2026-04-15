@@ -2,9 +2,9 @@ import { Page, Locator, AriaRole } from '@playwright/test';
 
 export interface LocatorHint {
   role?: AriaRole;
-  name?: string;
+  name?: string | RegExp;
   label?: string;
-  text?: string;
+  text?: string | RegExp;
   placeholder?: string;
   xpath?: string;
   testId?: string;

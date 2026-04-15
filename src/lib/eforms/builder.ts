@@ -83,7 +83,7 @@ export function buildEFormsNotice(input: {
   accessIsFree?: boolean;
   communication?: string;
 }): EFormsNotice {
-  return buildEForms(input);
+  return buildEForms(input as Partial<EFormsNotice>);
 }
 
 /**

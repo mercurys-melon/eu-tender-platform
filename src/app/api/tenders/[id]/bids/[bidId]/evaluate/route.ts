@@ -54,7 +54,7 @@ export async function PATCH(
     // Get current tender to check evaluation_started_at
     const { data: tender, error: tenderError } = await supabase
       .from('tenders')
-      .select('evaluation_started_at, awarded_bid_id')
+      .select('evaluation_started_at, evaluation_completed_at, awarded_bid_id')
       .eq('id', params.id)
       .single()
 
@@ -87,7 +87,7 @@ export async function PATCH(
         if (!tender.evaluation_completed_at) {
           tenderUpdateData.evaluation_completed_at = new Date().toISOString()
         }
-      } else if (validatedData.status !== 'winner' && tender.awarded_bid_id === params.bidId) {
+      } else if (tender.awarded_bid_id === params.bidId) {
         // If removing winner status, clear awarded_bid_id
         tenderUpdateData.awarded_bid_id = null
         tenderUpdateData.evaluation_completed_at = null

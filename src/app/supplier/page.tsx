@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import Link from 'next/link'
 import { formatDistanceToNow, format } from 'date-fns'
 import { da } from 'date-fns/locale'
@@ -70,20 +72,20 @@ async function getOpenTenders(supplierId: string | null): Promise<OpenTender[]> 
       .in('tender_id', tenderIds)
 
     const participantMap = participants?.reduce((acc, p) => {
-      acc[p.tender_id] = p.supplier_status
+      acc[p.tender_id] = p.supplier_status as SupplierTenderStatus
       return acc
     }, {} as Record<string, SupplierTenderStatus>) || {}
 
     return tenders.map(tender => ({
       ...tender,
       participant_status: participantMap[tender.id] || null,
-    }))
+    })) as unknown as OpenTender[]
   }
 
   return tenders.map(tender => ({
     ...tender,
     participant_status: null,
-  }))
+  })) as unknown as OpenTender[]
 }
 
 async function getMyParticipations(supplierId: string): Promise<MyParticipation[]> {
@@ -107,7 +109,7 @@ async function getMyParticipations(supplierId: string): Promise<MyParticipation[
   const tenderMap = tenders?.reduce((acc, t) => {
     acc[t.id] = t
     return acc
-  }, {} as Record<string, { title: string; status: string; submission_deadline: string }>) || {}
+  }, {} as Record<string, { title: string; status: string | null; submission_deadline: string | null }>) || {}
 
   return participants
     .map(p => {
