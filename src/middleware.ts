@@ -1,9 +1,9 @@
+import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getSessionAndRoleForMiddleware } from '@/lib/auth/session'
 
 // ---------------------------------------------------------------------------
-// CORS helpers
+// CORS helpers (uændret)
 // ---------------------------------------------------------------------------
 
 function getAllowedOrigin(req: NextRequest): string {
@@ -35,26 +35,90 @@ function addCorsHeaders(res: NextResponse, allowedOrigin: string): NextResponse 
 }
 
 // ---------------------------------------------------------------------------
+// Session refresh
+//
+// Bruger @supabase/ssr createServerClient med mutable response, så refreshede
+// tokens skrives tilbage i cookies og ikke mistes. Returnerer session + response.
+// ---------------------------------------------------------------------------
+
+async function refreshSession(req: NextRequest): Promise<{
+  session: { user: { id: string; email?: string } } | null
+  response: NextResponse
+}> {
+  let response = NextResponse.next({ request: { headers: req.headers } })
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return req.cookies.get(name)?.value
+        },
+        set(name: string, value: string, options: Record<string, unknown>) {
+          // Skriv til request (for downstream server components) og response (til browser)
+          req.cookies.set(name, value)
+          response = NextResponse.next({ request: { headers: req.headers } })
+          response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2])
+        },
+        remove(name: string, options: Record<string, unknown>) {
+          req.cookies.set(name, '')
+          response = NextResponse.next({ request: { headers: req.headers } })
+          response.cookies.set(name, '', options as Parameters<typeof response.cookies.set>[2])
+        },
+      },
+    }
+  )
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  return { session, response }
+}
+
+// Role-opslag – kun kaldt når redirect-destination afhænger af rollen
+async function getRoleForSession(
+  req: NextRequest,
+  userId: string
+): Promise<string | null> {
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return req.cookies.get(name)?.value
+        },
+        set() {},
+        remove() {},
+      },
+    }
+  )
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle()
+
+  return (profile as { role: string } | null)?.role ?? null
+}
+
+// ---------------------------------------------------------------------------
 // Middleware
 // ---------------------------------------------------------------------------
 
 export async function middleware(req: NextRequest) {
-  const url = new URL(req.url)
-  const { pathname } = url
+  const { pathname } = new URL(req.url)
 
-  // ── CORS: handle all /api/* routes before any other logic ──────────────
+  // ── 1. CORS: /api/* – KUN CORS-håndtering, ingen auth-logik ────────────
   if (pathname.startsWith('/api/')) {
     const allowedOrigin = getAllowedOrigin(req)
-
-    // Preflight — respond immediately with 200 + CORS headers
     if (req.method === 'OPTIONS') {
-      const preflight = new NextResponse(null, { status: 200 })
-      return addCorsHeaders(preflight, allowedOrigin)
+      return addCorsHeaders(new NextResponse(null, { status: 200 }), allowedOrigin)
     }
-
-    // All other API requests — pass through but attach CORS headers
-    const res = NextResponse.next()
-    return addCorsHeaders(res, allowedOrigin)
+    return addCorsHeaders(NextResponse.next(), allowedOrigin)
   }
 
   // ── Skip Next internals & static assets ────────────────────────────────
@@ -63,58 +127,60 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/favicon') ||
     pathname.startsWith('/robots.txt') ||
     pathname.startsWith('/sitemap.xml') ||
-    pathname.match(/\.(png|jpg|jpeg|gif|svg|webp|ico|css|js|txt)$/)
+    /\.(png|jpg|jpeg|gif|svg|webp|ico|css|js|txt)$/.test(pathname)
   ) {
     return NextResponse.next()
   }
 
-  // ── Public routes (never forced to /login) ─────────────────────────────
-  const PUBLIC_PATHS = new Set([
-    '/', '/about', '/contact', '/marketing', '/demo',
-    '/login', '/register', '/reset-password', '/update-password',
+  // ── 2. Eksisterende beskyttede ruter: KUN session-refresh, ingen redirect ─
+  // /buyer, /supplier, /tenders, /create, /dashboard har deres egen
+  // auth-logik i layouts/pages – middleware refresher kun cookies.
+  const SESSION_REFRESH_PREFIXES = [
+    '/buyer',
+    '/supplier',
+    '/tenders',
+    '/create',
+    '/dashboard',
+  ]
+  if (SESSION_REFRESH_PREFIXES.some((p) => pathname.startsWith(p))) {
+    const { response } = await refreshSession(req)
+    return response
+  }
+
+  // ── 3. (app)-ruter: session-refresh + gate til /login ──────────────────
+  // /ordregiver og /tilbudsgiver kræver autentificering.
+  if (pathname.startsWith('/ordregiver') || pathname.startsWith('/tilbudsgiver')) {
+    const { session, response } = await refreshSession(req)
+    if (!session) {
+      const loginUrl = new URL('/login', req.url)
+      loginUrl.searchParams.set('redirectTo', pathname)
+      return NextResponse.redirect(loginUrl)
+    }
+    return response
+  }
+
+  // ── 4. (auth)-ruter: redirect til rolle-dashboard hvis allerede logget ind ─
+  // Forhindrer authenticated brugere i at se login/signup-sider.
+  const AUTH_PATHS = new Set([
+    '/login',
+    '/signup',
+    '/reset-password',
+    '/update-password',
   ])
-  if (PUBLIC_PATHS.has(pathname) || pathname.startsWith('/marketing')) {
-    return NextResponse.next()
-  }
-
-  // ── Role-based protection for /buyer and /supplier routes ──────────────
-  if (pathname.startsWith('/buyer') || pathname.startsWith('/supplier')) {
-    const { session, role } = await getSessionAndRoleForMiddleware(req)
-
-    if (!session) {
-      const loginUrl = new URL('/login', req.url)
-      loginUrl.searchParams.set('redirectTo', pathname)
-      return NextResponse.redirect(loginUrl)
+  if (AUTH_PATHS.has(pathname)) {
+    const { session, response } = await refreshSession(req)
+    if (session) {
+      const role = await getRoleForSession(req, session.user.id)
+      // Brug ny (app)-ruter for authenticated brugere; fallback til legacy
+      const target =
+        role === 'buyer'
+          ? '/ordregiver'
+          : role === 'supplier'
+          ? '/tilbudsgiver'
+          : '/tilbudsgiver'
+      return NextResponse.redirect(new URL(target, req.url))
     }
-
-    if (!role) {
-      const loginUrl = new URL('/login', req.url)
-      loginUrl.searchParams.set('redirectTo', pathname)
-      return NextResponse.redirect(loginUrl)
-    }
-
-    if (pathname.startsWith('/buyer')) {
-      if (role !== 'buyer') {
-        if (role === 'supplier') return NextResponse.redirect(new URL('/supplier', req.url))
-        return NextResponse.redirect(new URL('/login', req.url))
-      }
-    } else if (pathname.startsWith('/supplier')) {
-      if (role !== 'supplier') {
-        if (role === 'buyer') return NextResponse.redirect(new URL('/buyer', req.url))
-        return NextResponse.redirect(new URL('/login', req.url))
-      }
-    }
-  }
-
-  // ── Other protected routes ──────────────────────────────────────────────
-  const PROTECTED_PREFIXES = ['/tenders', '/create', '/dashboard']
-  if (PROTECTED_PREFIXES.some((p) => pathname.startsWith(p))) {
-    const { session } = await getSessionAndRoleForMiddleware(req)
-    if (!session) {
-      const loginUrl = new URL('/login', req.url)
-      loginUrl.searchParams.set('redirectTo', pathname)
-      return NextResponse.redirect(loginUrl)
-    }
+    return response
   }
 
   return NextResponse.next()
@@ -122,11 +188,25 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
+    // CORS
     '/api/:path*',
+    // (auth)-ruter (reverse-redirect)
+    '/login',
+    '/signup',
+    '/reset-password',
+    '/update-password',
+    // Eksisterende beskyttede ruter (session-refresh kun)
+    '/buyer',
+    '/buyer/:path*',
+    '/supplier',
+    '/supplier/:path*',
     '/tenders/:path*',
     '/create/:path*',
     '/dashboard/:path*',
-    '/supplier/:path*',
-    '/buyer/:path*',
+    // (app)-ruter (session-refresh + gate)
+    '/ordregiver',
+    '/ordregiver/:path*',
+    '/tilbudsgiver',
+    '/tilbudsgiver/:path*',
   ],
 }

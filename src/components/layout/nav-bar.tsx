@@ -150,7 +150,7 @@ export function NavBar() {
                   </div>
                 )}
               </div>
-              <Link href="/register" className="btn-primary text-sm px-4 py-2 rounded-lg" data-testid="nav-register">Opret konto</Link>
+              <Link href="/signup" className="btn-primary text-sm px-4 py-2 rounded-lg" data-testid="nav-register">Opret konto</Link>
             </>
           ) : (
             <>

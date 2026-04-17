@@ -21,7 +21,7 @@ export function Hero() {
                 🔑 Log Ind
               </button>
             </Link>
-            <Link href="/register">
+            <Link href="/signup">
               <button className="btn-outline border-white text-white hover:bg-white hover:text-nordic-blue" aria-label="Opret en ny BlockBid konto">
                 📝 Opret Konto
               </button>

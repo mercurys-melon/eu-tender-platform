@@ -114,7 +114,7 @@ export default function DemoPage() {
                   🔑 Log Ind
                 </button>
               </Link>
-              <Link href="/register">
+              <Link href="/signup">
                 <button className="btn-accent px-8" aria-label="Opret en ny BlockBid konto">
                   📝 Opret Konto
                 </button>
@@ -309,7 +309,7 @@ export default function DemoPage() {
                 </span>
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link href="/register">
+                <Link href="/signup">
                   <button className="btn-accent px-8">
                     🚀 Kom i Gang Gratis
                   </button>

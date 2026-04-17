@@ -111,7 +111,7 @@ export default function DebugAuthPage() {
                   <li>You need to be logged in</li>
                   <li>Your profile must have role = 'supplier'</li>
                   <li>Go to <a href="/login" className="underline">/login</a> to sign in</li>
-                  <li>Or go to <a href="/register" className="underline">/register</a> to create an account</li>
+                  <li>Or go to <a href="/signup" className="underline">/register</a> to create an account</li>
                 </ol>
               </div>
             )}
@@ -123,7 +123,7 @@ export default function DebugAuthPage() {
         <a href="/login" className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
           Go to Login
         </a>
-        <a href="/register" className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
+        <a href="/signup" className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
           Go to Register
         </a>
         <a href="/supplier" className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600">

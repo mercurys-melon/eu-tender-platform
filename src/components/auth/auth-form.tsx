@@ -100,7 +100,7 @@ export function AuthForm({ mode }: AuthFormProps) {
         <p className="text-sm text-granite-grey" style={{ fontFamily: 'var(--font-inter), system-ui, sans-serif' }}>
           {mode === 'login' ? 'Har du ikke en konto?' : 'Har du allerede en konto?'}
           <a
-            href={mode === 'login' ? '/register' : '/login'}
+            href={mode === 'login' ? '/signup' : '/login'}
             className="text-xp-sky-blue hover:text-digital-navy ml-1 underline"
           >
             {mode === 'login' ? 'Opret konto' : 'Log ind'}

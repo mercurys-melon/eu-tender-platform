@@ -161,7 +161,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-small text-center mt-4">
-          Har du ikke en konto? <Link href="/register" className="link">Opret konto</Link>
+          Har du ikke en konto? <Link href="/signup" className="link">Opret konto</Link>
         </p>
       </div>
     </section>

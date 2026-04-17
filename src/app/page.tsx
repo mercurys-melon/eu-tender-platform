@@ -1,9 +1,13 @@
 import Link from 'next/link'
-import { getRoleDisplayName, getRoleDescription } from '@/lib/roles'
+import { getRoleDescription } from '@/lib/roles'
+import { NavBar } from '@/components/layout/nav-bar'
+import { SiteFooter } from '@/components/layout/site-footer'
 
 export default function HomePage() {
   return (
-    <>
+    <div className="min-h-screen flex flex-col">
+      <NavBar />
+      <main id="main" className="flex-1">
       {/* Hero */}
       <section className="bg-nordic-blue text-white">
         <div className="container-blockbid section-blockbid grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
@@ -28,7 +32,7 @@ export default function HomePage() {
             <p className="text-granite-grey">{getRoleDescription('supplier')}</p>
             <div className="flex gap-3 mt-2">
               <Link href="/login?role=supplier" className="btn-primary">Log ind som leverandør</Link>
-              <Link href="/register?role=supplier" className="btn-outline">Opret konto</Link>
+              <Link href="/signup?role=supplier" className="btn-outline">Opret konto</Link>
             </div>
           </div>
           {/* Ordregiver */}
@@ -37,7 +41,7 @@ export default function HomePage() {
             <p className="text-granite-grey">{getRoleDescription('buyer')}</p>
             <div className="flex gap-3 mt-2">
               <Link href="/login?role=buyer" className="btn-primary">Log ind som ordregiver</Link>
-              <Link href="/register?role=buyer" className="btn-outline">Opret konto</Link>
+              <Link href="/signup?role=buyer" className="btn-outline">Opret konto</Link>
             </div>
           </div>
         </div>
@@ -74,6 +78,8 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-    </>
+      </main>
+      <SiteFooter />
+    </div>
   )
 }

@@ -8,7 +8,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { roleFromQuery, type UserRole } from '@/lib/roles'
 
-export default function RegisterPage() {
+export default function SignupPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const initialRole = roleFromQuery(searchParams.get('role')) ?? 'supplier'
@@ -44,13 +44,12 @@ export default function RegisterPage() {
       if (error) {
         setError(error.message)
       } else if (data.user) {
-        // Set role in profile
         const userId = data.user.id
         if (userId) {
           await (supabase() as any)
             .from('profiles')
             .upsert({ id: userId, role: initialRole }, { onConflict: 'id' })
-          
+
           localStorage.setItem('preferred_role', initialRole)
           router.replace(initialRole === 'buyer' ? '/buyer' : '/supplier')
         }
@@ -65,7 +64,7 @@ export default function RegisterPage() {
   return (
     <section className="w-full max-w-md">
       <div className="card p-6 md:p-8">
-        <h1 className="text-h3 text-center mb-2">BlockBid</h1>
+        <h1 className="text-h3 text-center mb-2">Mercurry Tender</h1>
         <p className="text-center text-slate-grey mb-6">Opret ny konto</p>
 
         {error && (
@@ -77,41 +76,41 @@ export default function RegisterPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="label">Email</label>
-            <input 
-              type="email" 
-              className="input" 
-              placeholder="din@email.dk" 
+            <input
+              type="email"
+              className="input"
+              placeholder="din@email.dk"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              required 
+              required
             />
           </div>
           <div>
             <label className="label">Adgangskode</label>
-            <input 
-              type="password" 
-              className="input" 
+            <input
+              type="password"
+              className="input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               minLength={6}
-              required 
+              required
             />
             <p className="text-slate-grey text-xs mt-1">Minimum 6 tegn</p>
           </div>
           <div>
             <label className="label">Bekræft adgangskode</label>
-            <input 
-              type="password" 
-              className="input" 
+            <input
+              type="password"
+              className="input"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               minLength={6}
-              required 
+              required
             />
           </div>
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             className="btn-primary w-full"
             disabled={isLoading}
           >
@@ -126,4 +125,4 @@ export default function RegisterPage() {
       </div>
     </section>
   )
-} 
+}
