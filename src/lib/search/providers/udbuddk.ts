@@ -1,3 +1,7 @@
+/**
+ * ⚠️ Ikke verificeret mod rigtigt API endnu - mock fallback aktiv
+ */
+import { env } from '@/config/env'
 import { SearchParams, SearchResult, TenderItem } from '../types'
 
 function mapParamsToUdbudDK(params: SearchParams) {
@@ -22,8 +26,8 @@ function mapParamsToUdbudDK(params: SearchParams) {
 }
 
 export async function searchUdbudDK(params: SearchParams): Promise<SearchResult> {
-  const base = process.env.UDBUDDK_API_URL
-  const key = process.env.UDBUDDK_API_KEY
+  const base = env.udbudDk.preprodUrl ?? env.udbudDk.demoUrl
+  const key = env.udbudDk.apiKey
 
   // Fallback til mock, hvis vi ikke har credentials endnu:
   if (!base || !key) {

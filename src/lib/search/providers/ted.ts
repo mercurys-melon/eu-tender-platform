@@ -1,3 +1,7 @@
+/**
+ * ⚠️ Ikke verificeret mod rigtigt API endnu - mock fallback aktiv
+ */
+import { env } from '@/config/env'
 import { SearchParams, SearchResult, TenderItem } from '../types'
 
 function mapParamsToTED(params: SearchParams) {
@@ -24,8 +28,8 @@ function mapParamsToTED(params: SearchParams) {
 }
 
 export async function searchTED(params: SearchParams): Promise<SearchResult> {
-  const base = process.env.TED_API_URL
-  const key = process.env.TED_API_KEY
+  const base = env.ted.baseUrl
+  const key = env.ted.apiKey
 
   if (!base || !key) {
     const items: TenderItem[] = [
