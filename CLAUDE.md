@@ -357,6 +357,7 @@ Når en ny Claude Code session startes, verificeres følgende:
 - Brug ✅ / ⚠️ / ❌ til at markere status i rapporter
 - Henvis til konkret **paragraf-/BT-nummer** når der argumenteres udbudsretligt
 - Ved AI-genereret juridisk output: **altid** disclaim at det er vejledning, ikke rådgivning
+- Ved sessionsslut: AI foreslår opdateringer til SESSION_NOTES.md baseret på dagens arbejde og afventer godkendelse.
 
 ---
 
