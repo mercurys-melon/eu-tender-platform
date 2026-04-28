@@ -113,6 +113,41 @@ Platformen skal overholde og facilitere overholdelse af:
 
 ---
 
+## Kendt teknisk gæld — skal adresseres før produktion
+
+⚠️ Denne sektion dokumenterer kendte issues identificeret i sessionen 2026-04-22, der SKAL adresseres inden ERST PROD-go-live.
+
+### Pre-existing RLS-policies anvendt på rollen 'public'
+
+Følgende tabeller har SELECT/INSERT/UPDATE/DELETE-policies anvendt på `public` eller `anon`-rolle (i stedet for `authenticated`):
+
+- `audit_logs`: "Buyers can view audit logs for owned tenders" (SELECT, public), "Users can view own audit logs" (SELECT, public)
+- `bids`: "read bids" (SELECT, anon+authenticated)
+- `profiles`: "Users can insert own profile", "Users can read own profile", "Users can update own profile" (alle public)
+- `tender_documents`: 4 policies anvendt på public
+- `tender_questions`: "read_published_qna" (SELECT, public)
+- `tenders`: "read all tenders" (SELECT, anon+authenticated)
+
+Disse policies stammer fra migrations_old/-filer skrevet under Cursor-perioden. De er IKKE skabt i den aktuelle session (alle nye policies bruger korrekt 'authenticated' som target).
+
+### Krav til adressering
+
+Inden ERST PROD-go-live SKAL vi:
+
+1. Granske USING-klausulen i hver policy for at vurdere om den faktisk lækker data til anonyme brugere
+2. Skelne mellem 'public role' (alle, inkl. anon) og 'public schema'
+3. For policies der reelt skal være offentlige (fx publicerede tenders): dokumentere hvorfor
+4. For policies der IKKE skal være åbne for anon: lave en migration der ændrer target til 'authenticated'
+5. Funktionelt teste at autentificerede brugere stadig har korrekt adgang efter ændringen
+
+### Andre kendte issues
+
+- migrations_old/-mappen indeholder 8 historiske migrationsfiler der ikke er CLI-tracked. Konsoliderings-strategi udskydes til efter ERST PROD-go-live.
+- audit_logs mangler dedikeret 'actor_type'-kolonne — midlertidigt håndteret via metadata.actor_type i triggers fra migration 20260417120002.
+- tenders.organisation_id mangler FK-constraint til organisations.id — bevidst valg pga. legacy entity_id med fritekst-data.
+
+---
+
 ## API-integrationer
 
 ### Udbud.dk (ERST)
