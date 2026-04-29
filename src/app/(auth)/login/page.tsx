@@ -1,169 +1,88 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
-import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useFormState, useFormStatus } from 'react-dom'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase/client'
-import { roleFromQuery, type UserRole } from '@/lib/roles'
+import { login } from '../actions'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
-export default function LoginPage() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [role, setRole] = useState<UserRole | null>(roleFromQuery(searchParams.get('role')))
+function SubmitButton() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" className="w-full" disabled={pending}>
+      {pending ? 'Logger ind…' : 'Log ind'}
+    </Button>
+  )
+}
 
-  useEffect(() => {
-    if (role) {
-      localStorage.setItem('preferred_role', role)
-    }
-  }, [role])
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const { data, error } = await supabase().auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (error) {
-        setError(error.message)
-        setIsLoading(false)
-        return
-      }
-
-      if (!data.user) {
-        setError('Login fejlede. Prøv igen.')
-        setIsLoading(false)
-        return
-      }
-
-      // Get user profile to check role - use data.user directly
-      const { data: profile, error: profileError } = await supabase()
-        .from('profiles')
-        .select('role')
-        .eq('id', data.user.id)
-        .maybeSingle() as { data: { role: string } | null, error: unknown }
-      
-      if (profileError) {
-        console.error('Error fetching profile:', profileError)
-      }
-      
-      // Read dbRole from profile
-      const dbRole = profile?.role as UserRole | undefined
-      
-      // Read preferredRole from state variable or localStorage
-      const preferredRole = role || (localStorage.getItem('preferred_role') as UserRole | null)
-      
-      // Set finalRole with fallback chain
-      const finalRole: UserRole = dbRole ?? preferredRole ?? 'supplier'
-      
-      // If dbRole is falsy, upsert the profile with finalRole
-      if (!dbRole) {
-        const { error: upsertError } = await (supabase() as any)
-          .from('profiles')
-          .upsert({ id: data.user.id, role: finalRole }, { onConflict: 'id' })
-        
-        if (upsertError) {
-          console.error('Error upserting profile:', upsertError)
-        }
-      }
-      
-      // Wait a moment for cookies to be set by SSR client
-      await new Promise(resolve => setTimeout(resolve, 300))
-      
-      // Reset loading state before redirect
-      setIsLoading(false)
-      
-      // Handle redirectTo query parameter
-      const redirectTo = searchParams.get('redirectTo')
-      const defaultTarget = finalRole === 'buyer' ? '/buyer' : '/supplier'
-      
-      let target = defaultTarget
-      
-      // If redirectTo is provided and matches the user's role, use it
-      if (redirectTo) {
-        if (redirectTo.startsWith('/buyer') && finalRole === 'buyer') {
-          target = redirectTo
-        } else if (redirectTo.startsWith('/supplier') && finalRole === 'supplier') {
-          target = redirectTo
-        }
-      }
-      
-      // Use router.push - SSR client should have synced session to cookies
-      router.push(target)
-      router.refresh() // Force a refresh to ensure server components see the new session
-    } catch (err) {
-      console.error('Login error:', err)
-      setError('Der opstod en uventet fejl. Prøv igen.')
-      setIsLoading(false)
-    }
-  }
+export default function LoginPage({
+  searchParams,
+}: {
+  searchParams?: { message?: string }
+}) {
+  const [state, formAction] = useFormState(login, null)
 
   return (
-    <section className="w-full max-w-md">
-      <div className="card p-6 md:p-8">
-        <h1 className="text-h3 text-center mb-2">BlockBid</h1>
-        <p className="text-center text-slate-grey mb-6">Log ind på din konto</p>
-
-        <form onSubmit={handleSubmit} className="space-y-4" data-testid="login-form">
-          <div>
-            <label className="label">Email</label>
-            <input 
-              type="email" 
-              className="input" 
+    <Card>
+      <CardHeader className="space-y-1">
+        <CardTitle className="text-2xl text-center">Log ind</CardTitle>
+        <CardDescription className="text-center">
+          Indtast din email og adgangskode
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {searchParams?.message && (
+          <Alert className="mb-4 border-green-200 bg-green-50 text-green-800">
+            <AlertDescription>{searchParams.message}</AlertDescription>
+          </Alert>
+        )}
+        {state?.error && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertDescription>{state.error}</AlertDescription>
+          </Alert>
+        )}
+        <form action={formAction} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              name="email"
+              type="email"
               placeholder="din@email.dk"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
               required
-              data-testid="auth-login-email"
             />
           </div>
-          <div>
-            <label className="text-sm font-medium text-granite-grey mb-2 block">Adgangskode</label>
-            <input 
-              type="password" 
-              className="input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              data-testid="auth-login-password"
-            />
-            <div className="text-right mt-1">
-              <Link href="/reset-password" className="text-sm text-nordic-blue hover:text-emerald-green transition-colors">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Adgangskode</Label>
+              <Link
+                href="/reset-password"
+                className="text-sm text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+              >
                 Glemt adgangskode?
               </Link>
             </div>
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              required
+            />
           </div>
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3" data-testid="auth-login-error">
-              <p className="text-red-600 text-sm">{error}</p>
-            </div>
-          )}
-
-          <button 
-            type="submit" 
-            className="btn-primary w-full"
-            disabled={isLoading}
-            data-testid="auth-login-submit"
-          >
-            {isLoading ? 'Logger ind...' : 'Log ind'}
-          </button>
+          <SubmitButton />
         </form>
-
-        <p className="text-small text-center mt-4">
-          Har du ikke en konto? <Link href="/signup" className="link">Opret konto</Link>
+        <p className="mt-4 text-center text-sm text-muted-foreground">
+          Har du ikke en konto?{' '}
+          <Link href="/signup" className="underline underline-offset-4 hover:text-foreground">
+            Opret konto
+          </Link>
         </p>
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   )
-} 
+}

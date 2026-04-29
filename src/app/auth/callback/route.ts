@@ -2,81 +2,53 @@ import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
-  const requestUrl = new URL(request.url)
-  const code = requestUrl.searchParams.get('code')
-  const token = requestUrl.searchParams.get('token') // Sometimes Supabase sends token directly
-  const error = requestUrl.searchParams.get('error')
-  const errorCode = requestUrl.searchParams.get('error_code')
-  const errorDescription = requestUrl.searchParams.get('error_description')
-  const next = requestUrl.searchParams.get('next') ?? '/'
-  const type = requestUrl.searchParams.get('type') // 'recovery' for password reset
-  
-  // Log for debugging (remove in production)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('Auth callback - Full URL:', requestUrl.toString())
-    console.log('Auth callback - Params:', { 
-      code: code ? `${code.substring(0, 20)}...` : null, 
-      token: token ? `${token.substring(0, 20)}...` : null, 
-      type, 
-      next, 
-      error,
-      errorCode,
-      errorDescription,
-      allParams: Object.fromEntries(requestUrl.searchParams.entries())
-    })
-  }
+  const { searchParams, origin } = new URL(request.url)
+  const code = searchParams.get('code')
+  const type = searchParams.get('type') // 'recovery' | 'signup' | 'magiclink'
+  const error = searchParams.get('error')
+  const errorCode = searchParams.get('error_code')
+  const errorDescription = searchParams.get('error_description')
 
-  // Handle error cases first
+  // Handle error params from Supabase redirect
   if (error || errorCode) {
-    // Redirect to reset-password page with error information
-    const errorParams = new URLSearchParams()
-    if (error) errorParams.set('error', error)
-    if (errorCode) errorParams.set('error_code', errorCode)
-    if (errorDescription) errorParams.set('error_description', errorDescription)
-    
-    return NextResponse.redirect(new URL(`/reset-password?${errorParams.toString()}`, request.url))
-  }
-
-  if (code) {
-    const supabase = createClient()
-    
-    // Exchange the code for a session
-    const { error: exchangeError, data } = await supabase.auth.exchangeCodeForSession(code)
-    
-    if (!exchangeError && data.session) {
-      // Check if this is a password recovery (either from type param or next param)
-      const isPasswordRecovery = type === 'recovery' || next === '/update-password'
-      
-      if (isPasswordRecovery) {
-        // For password recovery, always redirect to update-password page
-        // The session is now set in cookies and will be available on the client
-        const response = NextResponse.redirect(new URL('/update-password', request.url))
-        return response
-      }
-      
-      // Regular authentication, redirect to next or dashboard
-      return NextResponse.redirect(new URL(next, request.url))
-    } else {
-      // Handle exchange errors
-      const errorParams = new URLSearchParams()
-      errorParams.set('error', exchangeError?.message || 'Failed to exchange code for session')
-      errorParams.set('error_code', exchangeError?.name || 'exchange_failed')
-      
-      return NextResponse.redirect(new URL(`/reset-password?${errorParams.toString()}`, request.url))
-    }
-  }
-
-  // If no code or error, check if this might be a password recovery that needs client-side handling
-  // In some cases, Supabase might redirect without a code, and the client needs to handle it
-  if (next === '/update-password' || type === 'recovery') {
-    // Redirect to update-password with all params so client can handle it
     const params = new URLSearchParams()
-    requestUrl.searchParams.forEach((value, key) => {
-      params.set(key, value)
-    })
-    return NextResponse.redirect(new URL(`/update-password?${params.toString()}`, request.url))
+    if (error) params.set('error', error)
+    if (errorCode) params.set('error_code', errorCode)
+    if (errorDescription) params.set('error_description', errorDescription)
+    return NextResponse.redirect(`${origin}/reset-password?${params}`)
   }
 
-  // If no code or error, redirect to login
-  return NextResponse.redirect(new URL('/login', request.url))
+  if (!code) {
+    // No code and no error – for recovery without code, send to update-password
+    if (type === 'recovery') return NextResponse.redirect(`${origin}/update-password`)
+    return NextResponse.redirect(`${origin}/login`)
+  }
+
+  const supabase = createClient()
+  const { error: exchangeError, data } = await supabase.auth.exchangeCodeForSession(code)
+
+  if (exchangeError) {
+    const params = new URLSearchParams({ error: exchangeError.message })
+    return NextResponse.redirect(`${origin}/reset-password?${params}`)
+  }
+
+  // Password recovery: always go to update-password (never to dashboard)
+  if (type === 'recovery') {
+    return NextResponse.redirect(`${origin}/update-password`)
+  }
+
+  // Email verification / signup / magic link: redirect to role dashboard
+  const userId = data.session?.user?.id
+  if (userId) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('active_role')
+      .eq('id', userId)
+      .single()
+
+    const target = profile?.active_role === 'supplier' ? '/tilbudsgiver' : '/ordregiver'
+    return NextResponse.redirect(`${origin}${target}`)
+  }
+
+  return NextResponse.redirect(`${origin}/login`)
 }

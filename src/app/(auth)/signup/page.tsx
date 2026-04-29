@@ -1,128 +1,109 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
-import { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useFormState, useFormStatus } from 'react-dom'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase/client'
-import { roleFromQuery, type UserRole } from '@/lib/roles'
+import { signup } from '../actions'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Checkbox } from '@/components/ui/checkbox'
+
+function SubmitButton() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" className="w-full" disabled={pending}>
+      {pending ? 'Opretter konto…' : 'Opret konto'}
+    </Button>
+  )
+}
 
 export default function SignupPage() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const initialRole = roleFromQuery(searchParams.get('role')) ?? 'supplier'
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError(null)
-
-    if (password.length < 6) {
-      setError('Adgangskoden skal være mindst 6 tegn')
-      setIsLoading(false)
-      return
-    }
-
-    if (password !== confirmPassword) {
-      setError('Adgangskoderne matcher ikke')
-      setIsLoading(false)
-      return
-    }
-
-    try {
-      const { data, error } = await supabase().auth.signUp({
-        email,
-        password,
-      })
-
-      if (error) {
-        setError(error.message)
-      } else if (data.user) {
-        const userId = data.user.id
-        if (userId) {
-          await (supabase() as any)
-            .from('profiles')
-            .upsert({ id: userId, role: initialRole }, { onConflict: 'id' })
-
-          localStorage.setItem('preferred_role', initialRole)
-          router.replace(initialRole === 'buyer' ? '/buyer' : '/supplier')
-        }
-      }
-    } catch (err) {
-      setError('Der opstod en uventet fejl. Prøv igen.')
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  const [state, formAction] = useFormState(signup, null)
 
   return (
-    <section className="w-full max-w-md">
-      <div className="card p-6 md:p-8">
-        <h1 className="text-h3 text-center mb-2">Mercurry Tender</h1>
-        <p className="text-center text-slate-grey mb-6">Opret ny konto</p>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-            <p className="text-red-600 text-sm">{error}</p>
-          </div>
+    <Card>
+      <CardHeader className="space-y-1">
+        <CardTitle className="text-2xl text-center">Opret konto</CardTitle>
+        <CardDescription className="text-center">
+          Du får automatisk adgang som både ordregiver og tilbudsgiver
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {state?.error && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertDescription>{state.error}</AlertDescription>
+          </Alert>
         )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="label">Email</label>
-            <input
+        <form action={formAction} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="full_name">Fuldt navn</Label>
+            <Input
+              id="full_name"
+              name="full_name"
+              type="text"
+              placeholder="Fornavn Efternavn"
+              autoComplete="name"
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              name="email"
               type="email"
-              className="input"
               placeholder="din@email.dk"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
               required
             />
           </div>
-          <div>
-            <label className="label">Adgangskode</label>
-            <input
+          <div className="space-y-2">
+            <Label htmlFor="password">Adgangskode</Label>
+            <Input
+              id="password"
+              name="password"
               type="password"
-              className="input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              minLength={6}
+              autoComplete="new-password"
+              minLength={8}
               required
             />
-            <p className="text-slate-grey text-xs mt-1">Minimum 6 tegn</p>
+            <p className="text-xs text-muted-foreground">Minimum 8 tegn</p>
           </div>
-          <div>
-            <label className="label">Bekræft adgangskode</label>
-            <input
+          <div className="space-y-2">
+            <Label htmlFor="confirm_password">Bekræft adgangskode</Label>
+            <Input
+              id="confirm_password"
+              name="confirm_password"
               type="password"
-              className="input"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              minLength={6}
+              autoComplete="new-password"
+              minLength={8}
               required
             />
           </div>
-
-          <button
-            type="submit"
-            className="btn-primary w-full"
-            disabled={isLoading}
-          >
-            {isLoading ? 'Opretter konto...' : 'Opret konto'}
-          </button>
+          <div className="flex items-start gap-3">
+            <Checkbox id="terms" name="terms" required className="mt-0.5" />
+            <Label htmlFor="terms" className="text-sm font-normal leading-relaxed cursor-pointer">
+              Jeg accepterer{' '}
+              <Link href="/vilkaar" className="underline underline-offset-4 hover:text-foreground" target="_blank">
+                vilkårene
+              </Link>{' '}
+              og{' '}
+              <Link href="/privatlivspolitik" className="underline underline-offset-4 hover:text-foreground" target="_blank">
+                privatlivspolitikken
+              </Link>
+            </Label>
+          </div>
+          <SubmitButton />
         </form>
-
-        <p className="text-small text-center mt-4">
+        <p className="mt-4 text-center text-sm text-muted-foreground">
           Har du allerede en konto?{' '}
-          <Link href="/login" className="link">Log ind</Link>
+          <Link href="/login" className="underline underline-offset-4 hover:text-foreground">
+            Log ind
+          </Link>
         </p>
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   )
 }

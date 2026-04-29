@@ -14,8 +14,28 @@ export function getServerClient() {
     {
       cookies: {
         get(name: string) { return cookieStore.get(name)?.value },
-        set() {/* handled by Next */},
-        remove() {/* handled by Next */},
+        set() {/* read-only in Server Components */},
+        remove() {/* read-only in Server Components */},
+      },
+    }
+  )
+}
+
+// Mutable cookie client for use in Server Actions where cookies() is writable
+export function getActionClient() {
+  const cookieStore = cookies()
+  return createSSRServerClient<Database>(
+    env.supabase.url,
+    env.supabase.anonKey,
+    {
+      cookies: {
+        get(name: string) { return cookieStore.get(name)?.value },
+        set(name: string, value: string, options: Parameters<typeof cookieStore.set>[2]) {
+          try { cookieStore.set(name, value, options) } catch {}
+        },
+        remove(name: string, options: Parameters<typeof cookieStore.set>[2]) {
+          try { cookieStore.set(name, '', options) } catch {}
+        },
       },
     }
   )

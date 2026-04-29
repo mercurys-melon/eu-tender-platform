@@ -76,8 +76,22 @@ export interface Database {
         Relationships: []
       }
       profiles: {
-        Row: { id: string; role: 'supplier' | 'buyer'; created_at: string | null; updated_at: string | null }
-        Insert: { id: string; role: 'supplier' | 'buyer'; created_at?: string | null; updated_at?: string | null }
+        Row: {
+          id: string
+          role: 'supplier' | 'buyer'
+          active_role: 'buyer' | 'supplier'
+          full_name: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id: string
+          role?: 'supplier' | 'buyer'
+          active_role?: 'buyer' | 'supplier'
+          full_name?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
         Update: Partial<Database['public']['Tables']['profiles']['Row']>
         Relationships: []
       }

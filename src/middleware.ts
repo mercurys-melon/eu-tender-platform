@@ -166,6 +166,7 @@ export async function middleware(req: NextRequest) {
     '/signup',
     '/reset-password',
     '/update-password',
+    '/verify-email',
   ])
   if (AUTH_PATHS.has(pathname)) {
     const { session, response } = await refreshSession(req)
@@ -195,6 +196,7 @@ export const config = {
     '/signup',
     '/reset-password',
     '/update-password',
+    '/verify-email',
     // Eksisterende beskyttede ruter (session-refresh kun)
     '/buyer',
     '/buyer/:path*',
