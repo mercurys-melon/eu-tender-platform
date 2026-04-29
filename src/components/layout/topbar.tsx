@@ -10,19 +10,38 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { MobileSidebarTrigger } from './sidebar'
+import { MobileSidebarTrigger, type SidebarProps } from './sidebar'
 import { Wordmark } from '@/components/brand/wordmark'
+import { switchActiveRole } from '@/app/(auth)/actions'
 
-export function Topbar() {
+// Topbar receives the same user data as Sidebar so MobileSidebarTrigger gets
+// correct props without an extra fetch.
+type TopbarProps = SidebarProps
+
+function getInitials(fullName: string | null, email: string | undefined): string {
+  if (fullName) {
+    return fullName
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
+  }
+  return (email?.[0] ?? 'U').toUpperCase()
+}
+
+export function Topbar({ activeRole, fullName, email }: TopbarProps) {
+  const initials = getInitials(fullName, email)
+  const currentRoleLabel = activeRole === 'buyer' ? 'Ordregiver' : 'Tilbudsgiver'
+  const switchToLabel = activeRole === 'buyer' ? 'Tilbudsgiver' : 'Ordregiver'
+
   return (
     <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b bg-background px-4">
-      {/* Mobil: hamburger + wordmark (skjult på desktop hvor sidebar viser wordmark) */}
-      <MobileSidebarTrigger />
+      <MobileSidebarTrigger activeRole={activeRole} fullName={fullName} email={email} />
       <div className="lg:hidden">
         <Wordmark size="sm" />
       </div>
 
-      {/* Søgefelt – skjult på mobil */}
       <div className="hidden md:block flex-1 max-w-sm">
         <input
           type="search"
@@ -32,14 +51,16 @@ export function Topbar() {
         />
       </div>
 
-      {/* Højre side */}
       <div className="ml-auto flex items-center gap-2">
-        {/* Skift rolle – placeholder, vises kun hvis bruger har begge roller */}
-        <Button variant="outline" size="sm" className="hidden md:flex h-8 text-xs">
-          Skift rolle
-        </Button>
+        <div className="hidden md:flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">{currentRoleLabel}</span>
+          <form action={switchActiveRole}>
+            <Button variant="outline" size="sm" className="h-8 text-xs" type="submit">
+              Skift til {switchToLabel}
+            </Button>
+          </form>
+        </div>
 
-        {/* Notifikationsklokke med badge */}
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -55,10 +76,9 @@ export function Topbar() {
           </Tooltip>
         </TooltipProvider>
 
-        {/* Avatar */}
         <Avatar className="h-8 w-8">
           <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
-            MT
+            {initials}
           </AvatarFallback>
         </Avatar>
       </div>

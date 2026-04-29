@@ -17,10 +17,27 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { buyerNavItems, supplierNavItems, type NavItem } from './nav-items'
 import { Wordmark } from '@/components/brand/wordmark'
 import { cn } from '@/lib/utils/cn'
+import { logout } from '@/app/(auth)/actions'
 
-// ---------------------------------------------------------------------------
-// NavLink
-// ---------------------------------------------------------------------------
+export interface SidebarProps {
+  activeRole: 'buyer' | 'supplier'
+  fullName: string | null
+  email: string | undefined
+}
+
+function getInitials(fullName: string | null, email: string | undefined): string {
+  if (fullName) {
+    return fullName
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
+  }
+  return (email?.[0] ?? 'U').toUpperCase()
+}
+
+// ── NavLink ───────────────────────────────────────────────────────────────────
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   return (
@@ -39,29 +56,26 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   )
 }
 
-// ---------------------------------------------------------------------------
-// SidebarNav – delt indhold brugt i desktop-sidebar og mobil-Sheet
-// ---------------------------------------------------------------------------
+// ── SidebarNav – delt indhold til desktop og mobil ────────────────────────────
 
-function SidebarNav() {
+export function SidebarNav({ activeRole, fullName, email }: SidebarProps) {
   const pathname = usePathname()
   const isOrdregiver = pathname.startsWith('/ordregiver')
   const items = isOrdregiver ? buyerNavItems : supplierNavItems
+  const initials = getInitials(fullName, email)
+  const displayName = fullName ?? email ?? 'Bruger'
 
   return (
     <div className="flex h-full flex-col">
-      {/* Logo */}
       <div className="flex h-14 shrink-0 items-center border-b px-4">
         <Wordmark size="sm" />
       </div>
 
-      {/* Navigation */}
       <nav
         className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5"
         aria-label="Primær navigation"
       >
         {items.map((item) => {
-          // Aktiv: eksakt match for root-ruter, prefix-match for underruter
           const isDashboardItem =
             item.href === '/ordregiver' || item.href === '/tilbudsgiver'
           const active = isDashboardItem
@@ -71,7 +85,6 @@ function SidebarNav() {
         })}
       </nav>
 
-      {/* Bundafsnit: avatar + bruger-dropdown */}
       <div className="shrink-0 border-t p-3">
         <Separator className="mb-3" />
         <DropdownMenu>
@@ -79,10 +92,10 @@ function SidebarNav() {
             <button className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
               <Avatar className="h-7 w-7 shrink-0">
                 <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                  MT
+                  {initials}
                 </AvatarFallback>
               </Avatar>
-              <span className="flex-1 truncate text-left">Bruger</span>
+              <span className="flex-1 truncate text-left">{displayName}</span>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="start" className="w-52">
@@ -94,13 +107,15 @@ function SidebarNav() {
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link
-                href="/login"
-                className="flex items-center gap-2 text-destructive focus:text-destructive"
-              >
-                <LogOut className="h-4 w-4" />
-                Log ud
-              </Link>
+              <form action={logout} className="w-full">
+                <button
+                  type="submit"
+                  className="flex w-full items-center gap-2 text-destructive"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Log ud
+                </button>
+              </form>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -109,23 +124,19 @@ function SidebarNav() {
   )
 }
 
-// ---------------------------------------------------------------------------
-// Sidebar – fast desktop-sidebar (lg+)
-// ---------------------------------------------------------------------------
+// ── Sidebar – fast desktop-sidebar (lg+) ─────────────────────────────────────
 
-export function Sidebar() {
+export function Sidebar(props: SidebarProps) {
   return (
     <aside className="hidden lg:flex fixed inset-y-0 left-0 z-30 w-64 flex-col border-r bg-background">
-      <SidebarNav />
+      <SidebarNav {...props} />
     </aside>
   )
 }
 
-// ---------------------------------------------------------------------------
-// MobileSidebarTrigger – bruges i Topbar til mobil-navigation
-// ---------------------------------------------------------------------------
+// ── MobileSidebarTrigger – bruges i Topbar til mobil-navigation ───────────────
 
-export function MobileSidebarTrigger() {
+export function MobileSidebarTrigger(props: SidebarProps) {
   return (
     <Sheet>
       <SheetTrigger asChild>
@@ -135,7 +146,7 @@ export function MobileSidebarTrigger() {
         </Button>
       </SheetTrigger>
       <SheetContent side="left" className="w-64 p-0">
-        <SidebarNav />
+        <SidebarNav {...props} />
       </SheetContent>
     </Sheet>
   )
