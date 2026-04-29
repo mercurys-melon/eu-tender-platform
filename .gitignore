@@ -103,3 +103,6 @@ temp/
 
 # Supabase temp
 supabase/.temp/
+# Environment files
+.env.local
+.env*.local
