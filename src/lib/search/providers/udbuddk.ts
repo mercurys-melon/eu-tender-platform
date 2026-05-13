@@ -26,11 +26,12 @@ function mapParamsToUdbudDK(params: SearchParams) {
 }
 
 export async function searchUdbudDK(params: SearchParams): Promise<SearchResult> {
-  const base = env.udbudDk.preprodUrl ?? env.udbudDk.demoUrl
-  const key = env.udbudDk.apiKey
+  // TODO (Fase 4): erstat med callUdbudDkApi() fra udbud-dk-client
+  const base = env.udbudDk.preprodApiUrl
+  const hasCredentials = !!(env.udbudDk.basicUser && env.udbudDk.basicPass)
 
   // Fallback til mock, hvis vi ikke har credentials endnu:
-  if (!base || !key) {
+  if (!base || !hasCredentials) {
     const items: TenderItem[] = [
       {
         id: 'udbuddk:demo-1',
@@ -52,8 +53,9 @@ export async function searchUdbudDK(params: SearchParams): Promise<SearchResult>
   }
 
   const qs = mapParamsToUdbudDK(params)
+  // TODO (Fase 4): token hentes via callUdbudDkApi() (OIDC-flow) — ikke direkte her
   const res = await fetch(`${base}/tenders?${qs}`, {
-    headers: { 'authorization': `Bearer ${key}` },
+    headers: {},
     // Next cache hint (kan tweakes i route):
     next: { revalidate: 300 },
   })

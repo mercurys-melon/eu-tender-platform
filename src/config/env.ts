@@ -54,10 +54,28 @@ const serverSchema = z.object({
   ),
 
   // --- Udbud.dk (ERST) ---
-  // Bruges af src/lib/publication/service.ts - dokumenteret virke mod PREPROD
+  // UDBUD_DK_ENV styrer hvilket miljø der publiceres til.
+  // Default 'preprod' er en sikkerhedsforsvarslinje: utilsigtet publicering til den
+  // danske udbudsportal undgås ved at kræve eksplicit valg af 'prod'.
+  // VIGTIGT: Adskillelsen er 100% URL-baseret — samme Basic Auth credentials
+  // bruges til både PREPROD og PROD (bekræftet af ERST, april 2026).
+  UDBUD_DK_ENV: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.enum(['preprod', 'prod']).default('preprod'),
+  ),
+  UDBUD_DK_BASIC_USER: optionalStr(),
+  UDBUD_DK_BASIC_PASS: optionalStr(),
+  UDBUD_DK_PREPROD_API_URL: optionalUrl(),
+  UDBUD_DK_PROD_API_URL: optionalUrl(),
+  UDBUD_DK_PREPROD_TOKEN_URL: optionalUrl(),
+  UDBUD_DK_PROD_TOKEN_URL: optionalUrl(),
+  // @deprecated — erstattet af UDBUD_DK_PREPROD_API_URL og OIDC-flow; bevaret for at undgå opstartscrash
   UDBUD_DK_API_KEY: optionalStr(),
+  // @deprecated — erstattet af UDBUD_DK_PREPROD_API_URL; bevaret for at undgå opstartscrash
   UDBUD_DK_PREPROD_URL: optionalUrl(),
+  // @deprecated — erstattet af UDBUD_DK_PROD_API_URL; bevaret for at undgå opstartscrash
   UDBUD_DK_PROD_URL: optionalUrl(),
+  // @deprecated — var aldrig i brug; bevaret for at undgå opstartscrash
   UDBUD_DK_DEMO_URL: optionalUrl(),
 
   // --- TED API v3 (EU Publications Office) ---
@@ -69,7 +87,10 @@ const serverSchema = z.object({
     (v) => (v === '' ? undefined : v),
     z
       .string()
-      .regex(/^\d+\.\d+\.\d+$/, 'EFORMS_SDK_VERSION skal følge semver-format, fx 1.13.2')
+      .regex(
+        /^(eforms-sdk-dk-)?\d+\.\d+\.\d+(-\d+\.\d+\.\d+)?$/,
+        'EFORMS_SDK_VERSION skal være enten semver (1.13.2), dansk SDK-format (1.13.0-1.3.0), eller fuldt ERST-format (eforms-sdk-dk-1.13.0-1.3.0)',
+      )
       .optional(),
   ),
 
@@ -129,10 +150,13 @@ export const env = {
     region: serverEnv.SUPABASE_REGION as string | undefined,
   },
   udbudDk: {
-    apiKey: serverEnv.UDBUD_DK_API_KEY as string | undefined,
-    preprodUrl: serverEnv.UDBUD_DK_PREPROD_URL as string | undefined,
-    prodUrl: serverEnv.UDBUD_DK_PROD_URL as string | undefined,
-    demoUrl: serverEnv.UDBUD_DK_DEMO_URL as string | undefined,
+    env: (serverEnv.UDBUD_DK_ENV ?? 'preprod') as 'preprod' | 'prod',
+    basicUser: serverEnv.UDBUD_DK_BASIC_USER as string | undefined,
+    basicPass: serverEnv.UDBUD_DK_BASIC_PASS as string | undefined,
+    preprodApiUrl: serverEnv.UDBUD_DK_PREPROD_API_URL as string | undefined,
+    prodApiUrl: serverEnv.UDBUD_DK_PROD_API_URL as string | undefined,
+    preprodTokenUrl: serverEnv.UDBUD_DK_PREPROD_TOKEN_URL as string | undefined,
+    prodTokenUrl: serverEnv.UDBUD_DK_PROD_TOKEN_URL as string | undefined,
   },
   ted: {
     apiKey: serverEnv.TED_API_KEY as string | undefined,
