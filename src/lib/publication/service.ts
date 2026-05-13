@@ -1,41 +1,70 @@
 /**
  * Publication Service for udbud.dk
- * Handles publication jobs with retry logic and idempotency
+ * Håndterer publikationsjobs med retry-logik og idempotency.
+ *
+ * TODO (teknisk gæld, adresseres efter P1):
+ * UdbudDKPayload returnerer flade JSON-felter, men ERST forventer eForms UBL XML
+ * per openapi-udbud.yml og scripts/output/notice-payload.xml.
+ * payload-builder.ts skal erstattes med en XML-generator der producerer korrekt
+ * eForms-format (eforms-sdk-dk-1.13.0-1.3.0 eller nyere).
  */
 
 import { getServiceClient } from '@/lib/supabase/server'
+import type { Json } from '@/lib/supabase/types'
 import { Tender } from '@/lib/tenders/types'
 import { buildUdbudDKPayload, validatePayload } from './payload-builder'
+import { callUdbudDkApi, getActiveUdbudDkEnvironment } from './udbud-dk-client'
+import { env } from '@/config/env'
 import type {
   PublicationJob,
   PublicationJobStatus,
   PublicationResult,
+  UdbudDKPayload,
   UdbudDKResponse,
 } from './types'
 import { randomUUID } from 'crypto'
 
-const UDBUD_DK_PREPROD_URL = process.env.UDBUD_DK_PREPROD_URL || 'https://preprod.udbud.dk/api/v1/publications'
-const UDBUD_DK_API_KEY = process.env.UDBUD_DK_API_KEY || ''
-
 const MAX_ATTEMPTS = 3
-const INITIAL_RETRY_DELAY_MS = 1000 // 1 second
-const MAX_RETRY_DELAY_MS = 10000 // 10 seconds
+const INITIAL_RETRY_DELAY_MS = 1000
+const MAX_RETRY_DELAY_MS = 10000
 
-/**
- * Calculate exponential backoff delay for retries
- */
-function calculateRetryDelay(attempt: number): number {
-  const delay = Math.min(INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt - 1), MAX_RETRY_DELAY_MS)
-  return delay
+// Forventet response-form fra ERST API
+interface UdbudDKApiResponseBody {
+  id?: string
+  message?: string
+  request_id?: string
+  errors?: Array<{ field?: string; message?: string } | string>
 }
 
 /**
- * Create a new publication job in the database (outbox pattern)
+ * Hent SDK-version fra env — påkrævet for at bygge det korrekte ERST API-path.
+ * Format: eforms-sdk-dk-1.13.0-1.3.0 (se openapi-udbud.yml og git.erst.dk/udbud-dk/sdk).
+ */
+function getSdkVersion(): string {
+  const sdkVersion = env.ted.sdkVersion
+  if (!sdkVersion) {
+    throw new Error(
+      '[publication] EFORMS_SDK_VERSION er ikke sat. ' +
+        'Eksempel: eforms-sdk-dk-1.13.0-1.3.0 — verificer aktuelt tag mod git.erst.dk/udbud-dk/sdk',
+    )
+  }
+  return sdkVersion
+}
+
+/**
+ * Beregn exponential backoff delay for retries
+ */
+function calculateRetryDelay(attempt: number): number {
+  return Math.min(INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt - 1), MAX_RETRY_DELAY_MS)
+}
+
+/**
+ * Opret nyt publikationsjob i databasen (outbox pattern)
  */
 async function createPublicationJob(
   tenderId: string,
-  payload: Record<string, any>,
-  requestId: string
+  payload: UdbudDKPayload,
+  requestId: string,
 ): Promise<PublicationJob> {
   const supabase = getServiceClient()
 
@@ -46,7 +75,7 @@ async function createPublicationJob(
       status: 'pending',
       payload_version: 1,
       request_id: requestId,
-      payload,
+      payload: payload as unknown as Json,
       attempts: 0,
       max_attempts: MAX_ATTEMPTS,
     })
@@ -54,32 +83,29 @@ async function createPublicationJob(
     .single()
 
   if (error || !data) {
-    throw new Error(`Failed to create publication job: ${error?.message || 'Unknown error'}`)
+    throw new Error(`Failed to create publication job: ${error?.message ?? 'Unknown error'}`)
   }
 
   return data as PublicationJob
 }
 
 /**
- * Update publication job status
+ * Opdater status på publikationsjob
  */
 async function updateJobStatus(
   jobId: string,
   updates: {
     status?: PublicationJobStatus
-    response?: Record<string, any>
+    response?: Json
     last_error?: string | null
     attempts?: number
     next_retry_at?: string | null
     completed_at?: string | null
-  }
+  },
 ): Promise<void> {
   const supabase = getServiceClient()
 
-  const { error } = await supabase
-    .from('publication_jobs')
-    .update(updates)
-    .eq('id', jobId)
+  const { error } = await supabase.from('publication_jobs').update(updates).eq('id', jobId)
 
   if (error) {
     throw new Error(`Failed to update publication job: ${error.message}`)
@@ -87,43 +113,46 @@ async function updateJobStatus(
 }
 
 /**
- * Call udbud.dk PREPROD API
+ * Kald Udbud.dk publikations-API via den env-bevidste client.
+ *
+ * Endpoint per openapi-udbud.yml:
+ *   POST /ekstern-data/bekendtgoerelse/v1/{sdkVersion}/publicer
+ *
+ * Mapper fetch-Response til UdbudDKResponse til brug i processPublicationAttempt.
  */
 async function callUdbudDKAPI(
-  payload: Record<string, any>,
-  requestId: string
+  payload: UdbudDKPayload,
+  requestId: string,
 ): Promise<UdbudDKResponse> {
-  const response = await fetch(UDBUD_DK_PREPROD_URL, {
+  const sdkVersion = getSdkVersion()
+
+  const response = await callUdbudDkApi({
+    path: `/ekstern-data/bekendtgoerelse/v1/${sdkVersion}/publicer`,
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${UDBUD_DK_API_KEY}`,
-      'X-Idempotency-Key': requestId,
-    },
-    body: JSON.stringify(payload),
+    body: payload,
+    idempotencyKey: requestId,
   })
 
-  const data = await response.json()
+  const data = (await response.json()) as UdbudDKApiResponseBody
 
   if (!response.ok) {
-    // Try to extract field errors from response
-    const errors = data.errors || []
-    if (errors.length > 0) {
+    const rawErrors = data.errors ?? []
+    if (rawErrors.length > 0) {
       return {
         status: 'rejected',
-        message: data.message || 'Valideringsfejl',
-        errors: errors.map((err: any) => ({
-          field: err.field,
-          message: err.message || err,
-        })),
+        message: data.message ?? 'Valideringsfejl',
+        errors: rawErrors.map((err) =>
+          typeof err === 'string'
+            ? { message: err }
+            : { field: err.field, message: err.message ?? String(err) },
+        ),
         request_id: requestId,
       }
     }
-
     return {
       status: 'rejected',
-      message: data.message || `API fejl: ${response.status} ${response.statusText}`,
-      errors: [{ message: data.message || `HTTP ${response.status}` }],
+      message: data.message ?? `API fejl: ${response.status} ${response.statusText}`,
+      errors: [{ message: data.message ?? `HTTP ${response.status}` }],
       request_id: requestId,
     }
   }
@@ -131,17 +160,17 @@ async function callUdbudDKAPI(
   return {
     status: 'accepted',
     id: data.id,
-    message: data.message || 'Publikation accepteret',
-    request_id: data.request_id || requestId,
+    message: data.message ?? 'Publikation accepteret',
+    request_id: data.request_id ?? requestId,
   }
 }
 
 /**
- * Process a single publication attempt
+ * Processér et enkelt publikationsforsøg
  */
 async function processPublicationAttempt(
   job: PublicationJob,
-  payload: Record<string, any>
+  payload: UdbudDKPayload,
 ): Promise<{ success: boolean; response?: UdbudDKResponse; error?: string }> {
   try {
     const response = await callUdbudDKAPI(payload, job.request_id!)
@@ -149,28 +178,26 @@ async function processPublicationAttempt(
     if (response.status === 'accepted') {
       await updateJobStatus(job.id, {
         status: 'completed',
-        response,
+        response: response as unknown as Json,
         last_error: null,
         completed_at: new Date().toISOString(),
       })
       return { success: true, response }
     } else {
-      // Rejected by API
-      const errorMessage = response.message || 'Publikation blev afvist'
+      const errorMessage = response.message ?? 'Publikation blev afvist'
       await updateJobStatus(job.id, {
         status: 'failed',
-        response,
+        response: response as unknown as Json,
         last_error: errorMessage,
       })
       return { success: false, response, error: errorMessage }
     }
-  } catch (error: any) {
-    // Network or other error
-    const errorMessage = error.message || 'Netværksfejl ved publikation'
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Netværksfejl ved publikation'
     const newAttempts = job.attempts + 1
 
     if (newAttempts >= job.max_attempts) {
-      // Max attempts reached
       await updateJobStatus(job.id, {
         status: 'failed',
         last_error: errorMessage,
@@ -178,7 +205,6 @@ async function processPublicationAttempt(
       })
       return { success: false, error: errorMessage }
     } else {
-      // Schedule retry
       const retryDelay = calculateRetryDelay(newAttempts)
       const nextRetryAt = new Date(Date.now() + retryDelay).toISOString()
 
@@ -194,12 +220,13 @@ async function processPublicationAttempt(
 }
 
 /**
- * Main function to publish a tender to udbud.dk
+ * Publicer et udbud til udbud.dk
  */
 export async function publishToUdbud(tenderId: string): Promise<PublicationResult> {
+  console.log(`[publication] publishing tender=${tenderId} env=${getActiveUdbudDkEnvironment()}`)
+
   const supabase = getServiceClient()
 
-  // Fetch tender data
   const { data: tender, error: tenderError } = await supabase
     .from('tenders')
     .select('*')
@@ -216,10 +243,8 @@ export async function publishToUdbud(tenderId: string): Promise<PublicationResul
     }
   }
 
-  // Build payload
   const payload = buildUdbudDKPayload(tender as Tender)
 
-  // Validate payload
   const validationErrors = validatePayload(payload)
   if (validationErrors.length > 0) {
     return {
@@ -231,27 +256,23 @@ export async function publishToUdbud(tenderId: string): Promise<PublicationResul
     }
   }
 
-  // Generate idempotency key
   const requestId = randomUUID()
 
-  // Create job (outbox pattern)
   let job: PublicationJob
   try {
     job = await createPublicationJob(tenderId, payload, requestId)
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
       jobId: '',
       status: 'failed',
       message: 'Kunne ikke oprette publikationsjob',
-      errors: [{ message: error.message || 'Ukendt fejl' }],
+      errors: [{ message: error instanceof Error ? error.message : 'Ukendt fejl' }],
     }
   }
 
-  // Update status to processing
   await updateJobStatus(job.id, { status: 'processing' })
 
-  // Process publication attempt
   const result = await processPublicationAttempt(job, payload)
 
   if (result.success && result.response) {
@@ -259,26 +280,26 @@ export async function publishToUdbud(tenderId: string): Promise<PublicationResul
       success: true,
       jobId: job.id,
       status: 'completed',
-      message: result.response.message || 'Publikation gennemført',
+      message: result.response.message ?? 'Publikation gennemført',
       requestId: result.response.request_id,
     }
   } else {
-    // Extract errors from response if available
-    const errors = result.response?.errors || [{ message: result.error || 'Publikation fejlede' }]
-
+    const errors = result.response?.errors ?? [
+      { message: result.error ?? 'Publikation fejlede' },
+    ]
     return {
       success: false,
       jobId: job.id,
       status: job.attempts >= job.max_attempts ? 'failed' : 'retrying',
-      message: result.error || 'Publikation fejlede',
+      message: result.error ?? 'Publikation fejlede',
       errors,
-      requestId: job.request_id || undefined,
+      requestId: job.request_id ?? undefined,
     }
   }
 }
 
 /**
- * Get publication job status
+ * Hent status på et enkelt publikationsjob
  */
 export async function getPublicationJobStatus(jobId: string): Promise<PublicationJob | null> {
   const supabase = getServiceClient()
@@ -297,7 +318,7 @@ export async function getPublicationJobStatus(jobId: string): Promise<Publicatio
 }
 
 /**
- * Get publication jobs for a tender
+ * Hent alle publikationsjobs for et udbud, nyeste først
  */
 export async function getTenderPublicationJobs(tenderId: string): Promise<PublicationJob[]> {
   const supabase = getServiceClient()
