@@ -146,16 +146,37 @@ Inden ERST PROD-go-live SKAL vi:
 - audit_logs mangler dedikeret 'actor_type'-kolonne — midlertidigt håndteret via metadata.actor_type i triggers fra migration 20260417120002.
 - tenders.organisation_id mangler FK-constraint til organisations.id — bevidst valg pga. legacy entity_id med fritekst-data.
 
+### Identificeret 13. maj 2026 (P1-sessionen)
+
+- **Payload-format mismatch:** `UdbudDKPayload` i `payload-builder.ts` producerer fladt JSON, men ERST forventer eForms UBL XML (per `openapi-udbud.yml` og `scripts/output/notice-payload.xml`). `service.ts` har TODO-kommentar. Skal fixes før første reelle PROD-publicering — uden korrekt format vil valider-endpoint returnere fejl.
+
+- **Søge-API mangler i ERST-spec:** `src/lib/search/providers/udbuddk.ts` returnerer mock-data fordi ERST's API ikke har et søge-endpoint. Afklaring afventer `system@udbud.dk`. Alternativ arkitektur: periodisk sync via `fraKilde/{DKUDBUD}` + lokal indeksering i Supabase.
+
+- **getSession() advarsel fra Supabase:** Auth-koden bruger flere steder `getSession()` der ifølge Supabase's egne docs er usikker (læser cookies uden auth-server-verifikation). Best practice er `getUser()`. Skal adresseres som del af security-audit før produktion.
+
+- **privatlivspolitik og vilkaar er stubs:** `src/app/privatlivspolitik/page.tsx` og `src/app/vilkaar/page.tsx` er placeholder-ruter uden reelt juridisk indhold. Skal udfyldes før pilotkunde åbnes.
+
+- **Token-cache er global mutable state:** `udbud-dk-client.ts` cacher tokens in-memory per Node-proces. Ved horizontal scaling (flere Vercel-instanser) vil hver instans have sin egen cache og fetche selvstændige tokens. Overvej Redis/Vercel KV når skaleringsmønsteret er afklaret.
+
 ---
 
 ## API-integrationer
 
 ### Udbud.dk (ERST)
-- **Status:** Demo + pre-prod miljø aktivt – tests skal bestås
+- **Status:** PREPROD funktionel test bestået (DKE3 + DKE0, commit b993e72); PROD-adgang tildelt april 2026
 - **Formål:** Publicering af udbudsbekendtgørelser til den nationale portal
-- **Auth:** API-nøgle via miljøvariabel `UDBUDK_API_KEY`
-- **Endpoint base:** Konfigureres per miljø (demo/pre-prod/prod)
-- **Vigtigt:** Alle publiceringsflows skal valideres mod ERST's krav inden afsendelse
+- **Auth:** OIDC client_credentials flow med Basic Auth
+  1. `POST {tokenUrl}` med `Authorization: Basic base64(user:pass)` og `Content-Type: application/x-www-form-urlencoded`
+  2. Modtag JWT `access_token` (`expires_in` typisk 600s fra ERST)
+  3. `Bearer {accessToken}` på alle efterfølgende API-kald
+- **Client:** `src/lib/publication/udbud-dk-client.ts` håndterer token-cache (60s safety margin), timeouts (5s token / 10s API) og miljø-guards
+- **Spec-reference:** `openapi-udbud.yml` (lokalt) + `git.erst.dk/udbud-dk/sdk` (officiel)
+- **PROD-guard:** kræver `NODE_ENV=production` OG `UDBUD_DK_ENV=prod` — client kaster fejl ellers
+- **Påkrævede endpoints (per openapi-udbud.yml):**
+  - `POST /ekstern-data/bekendtgoerelse/v1/{sdkVersion}/valider` (validering)
+  - `POST /ekstern-data/bekendtgoerelse/v1/{sdkVersion}/publicer` (publicering)
+  - `GET  /ekstern-data/bekendtgoerelse/v1/fraKilde/{kilde}` (datasync — TED / DKUDBUD / ALLE)
+  - `GET  /ekstern-data/bekendtgoerelse/v1/{noticeId}/{noticeVersion}` (enkelt notice)
 
 ### TED API v3 (EU Publications Office)
 - ⚠️ **TEDAPI v2 udfaset ultimo september 2025** – al integration skal ske mod v3
@@ -186,14 +207,21 @@ Inden ERST PROD-go-live SKAL vi:
 
 ### Miljøvariable (ingen værdier committes)
 ```
-# Udbud.dk (ERST)
-UDBUDK_API_KEY=
-UDBUDK_BASE_URL=            # skifter per miljø
+# Udbud.dk (ERST) — bekræftet april 2026
+# Adskillelse PREPROD/PROD er udelukkende URL-baseret (samme credentials begge miljøer)
+UDBUD_DK_ENV=preprod              # enum: 'preprod' | 'prod' (default: preprod)
+UDBUD_DK_BASIC_USER=              # Basic Auth bruger fra ERST
+UDBUD_DK_BASIC_PASS=              # Basic Auth password fra ERST
+UDBUD_DK_PREPROD_API_URL=https://api-demo.udbud.dk/udbud
+UDBUD_DK_PROD_API_URL=https://api.udbud.dk/udbud
+UDBUD_DK_PREPROD_TOKEN_URL=https://erstpreprod.virk.dk/auth/token?grant_type=client_credentials
+UDBUD_DK_PROD_TOKEN_URL=https://erst.virk.dk/auth/token?grant_type=client_credentials
+
+EFORMS_SDK_VERSION=eforms-sdk-dk-1.13.0-1.3.0   # verificer mod git.erst.dk/udbud-dk/sdk
 
 # TED API v3
 TED_API_KEY=
 TED_API_BASE_URL=           # preview / production
-EFORMS_SDK_VERSION=         # f.eks. 1.13.2
 
 # Supabase
 SUPABASE_URL=
@@ -361,6 +389,6 @@ Når en ny Claude Code session startes, verificeres følgende:
 
 ---
 
-*Sidst opdateret: 22. april 2026*
+*Sidst opdateret: 13. maj 2026*
 *Projekt: eu-tender-platform*
-*Version: 2.0*
+*Version: 2.1*
