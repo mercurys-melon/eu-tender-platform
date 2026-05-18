@@ -101,20 +101,12 @@ export async function POST(request: NextRequest) {
     // Insert bid into database
     const supabase = createClient()
     
-    // First, check if user has a supplier profile or use user_id temporarily
-    const { data: supplier } = await supabase
-      .from('suppliers')
-      .select('id')
-      .eq('user_id', user.id)
-      .single()
-
-    const supplierId = supplier?.id || user.id // Fallback to user.id if no supplier profile
-
     const { data: bidData, error: bidError } = await supabase
       .from('bids')
       .insert({
         tender_id: tenderId,
-        supplier_id: supplierId,
+        supplier_id: user.id,
+        created_by: user.id,
         amount: priceNum,
         currency: currency,
         documents: documentPaths.length > 0 ? documentPaths : [],
