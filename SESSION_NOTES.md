@@ -1,422 +1,146 @@
-\# SESSION\_NOTES.md
-
-
+# SESSION_NOTES.md
 
 Denne fil bevares som kontinuitet mellem AI-assisterede arbejdssessioner. Læs den ved start af hver ny session sammen med CLAUDE.md.
 
+**Sidst opdateret:** 18. maj 2026
+**Sidst aktive session:** 18. maj 2026 (Rute C: API-RLS-refaktor på bids + types.ts sync)
 
-
-\*\*Sidst opdateret:\*\* 13. maj 2026
-
-\*\*Sidst aktive session:\*\* 13. maj 2026 (P1: Udbud.dk PROD/PREPROD-adskillelse med OIDC-flow)
-
-
-
-\---
-
-
-
-\## Hvor vi står lige nu
-
-
-
-\### ✅ P1 færdig — Udbud.dk integration har env-bevidst client
-
-
-
-Fem atomare commits pushed til `origin/cursor-automation`:
-
-
-
-| Commit | Indhold |
-
-|--------|---------|
-
-| `ccfc88c` | env-schema: UDBUD\_DK\_ENV enum + udvidet EFORMS\_SDK\_VERSION regex |
-
-| `3d5b202` | udbud-dk-client.ts: OIDC token-flow med cache og guards |
-
-| `c568b72` | service.ts refaktor til at bruge client |
-
-| `d9f37a9` | search-provider: fjernet dødkode, dokumenteret mock-baggrund |
-
-| `bc79c28` | CLAUDE.md: fix typo, dokumentér OIDC-flow og P1 teknisk gæld |
-
-
-
-\### ✅ Bekræftet faktuelt grundlag
-
-
-
-\- API base URL: `https://api-demo.udbud.dk/udbud` (PREPROD) / `https://api.udbud.dk/udbud` (PROD)
-
-\- Token endpoints: `https://erstpreprod.virk.dk/auth/token` / `https://erst.virk.dk/auth/token`
-
-\- Auth: OIDC client\_credentials med Basic Auth, expires\_in \~600s
-
-\- SDK-version format der virker mod ERST: `eforms-sdk-dk-1.13.0-1.3.0`
-
-\- ERST har bekræftet: samme Basic Auth credentials til begge miljøer (adskillelse er URL-baseret)
-
-
-
-\### ✅ Tidligere arbejde stadig gyldigt
-
-
-
-\- Database-fundament: 4 migrations pushed (organisations, audit\_logs INSERT, bids-RLS, env-konsolidering)
-
-\- Auth refaktoreret til Server Actions (sidste session, 29. april)
-
-\- ERST PREPROD funktionel test bestået (commit b993e72, marts/april)
-
-\- ERST PROD-adgang tildelt april 2026
-
-
-
-\---
-
-
-
-\## Det vigtigste at vide før næste session
-
-
-
-\### 🔴 Client er IKKE smoke-testet mod PREPROD endnu
-
-
-
-P1 har implementeret den nye client og refaktoreret service.ts, men ingen har endnu kørt et faktisk publicerings-kald gennem den nye kode-sti. TypeScript compilerer, men runtime er uverificeret.
-
-
-
-\*\*Næste session SKAL starte med:\*\*
-
-1\. Kør `scripts/udbud-functional-test.mjs` mod PREPROD og verificer at det stadig passerer
-
-2\. Eller: lav et manuelt curl mod `/api/tenders/<id>/publish` med test-tender
-
-
-
-Hvis testen fejler, har vi en bug i client- eller service-koden der skal fixes før noget andet.
-
-
-
-\### 🔴 Payload-format mismatch er stadig en blocker for PROD
-
-
-
-`UdbudDKPayload` returnerer fladt JSON, men ERST forventer eForms UBL XML. Den eksisterende funktionelle test (b993e72) bestod fordi den brugte XML-payload (se `scripts/output/notice-payload.xml`). Vores service.ts vil \*\*ikke\*\* virke mod ERST før payload-builder er rewritten til at producere XML.
-
-
-
-Dette er \*\*eksisterende teknisk gæld\*\* (var også problemet før P1), men det er nu eksplicit dokumenteret i CLAUDE.md og som TODO i service.ts.
-
-
-
-\### 🟠 ERST-mail om søge-API afventer
-
-
-
-Send mail til `system@udbud.dk`:
-
-\- Findes der et søge-API til fritekst/CPV/buyer-filtrering vi har overset?
-
-\- Hvis ikke: er periodisk sync via `fraKilde/{DKUDBUD}` + lokal indeksering den anbefalede tilgang?
-
-
-
-Email-skabelon i sidste session-output (Claude-tråd, 13. maj).
-
-
-
-\### 🟠 Compliance-status er stadig usikker
-
-
-
-Ikke berørt i P1:
-
-\- DPA med Anthropic, Resend, Supabase — underskrevet?
-
-\- ZDR aktiveret hos Anthropic?
-
-\- `src/app/privatlivspolitik/page.tsx` og `src/app/vilkaar/page.tsx` er stubs (8 linjer hver)
-
-\- Tilgængelighedserklæring — eksisterer den?
-
-
-
-Skal afklares før pilotkunde åbnes.
-
-
-
-\---
-
-
-
-\## Næste session — prioriteret to-do
-
-
-
-\### Prioritet 1: Smoke-test P1 mod PREPROD
-
-
-
-Cirka 30 min menneske-arbejde. Verificer at den nye client faktisk fungerer end-to-end mod ERST PREPROD.
-
-
-
-\### Prioritet 2: API-kode opdateret til ny RLS-model (fra sidste session)
-
-
-
-Stadig blocker for første kunde. `src/app/api/bids/` skal refaktoreres til at bruge `get\_bid\_metadata\_for\_tender()` og `update\_bid\_status()` RPCs i stedet for direkte queries. Detaljer i tidligere SESSION\_NOTES-version (se git history hvis nødvendigt).
-
-
-
-Estimat: 2-3 timer Claude Code.
-
-
-
-\### Prioritet 3: Payload-builder XML-rewrite
-
-
-
-Rewrite `src/lib/publication/payload-builder.ts` til at producere eForms UBL XML i stedet for fladt JSON. Reference: `scripts/output/notice-payload.xml` viser den korrekte struktur. ERST's CVS-validering kan bruges til at verificere output.
-
-
-
-Estimat: 3-4 timer (kompleks XML-struktur, kræver omhu).
-
-
-
-\### Prioritet 4: Compliance-tjek
-
-
-
-Menneske-arbejde primært. Status-check af DPA'er, ZDR-aktivering, og udfyldning af privatlivspolitik/vilkaar.
-
-
-
-\### Prioritet 5: Audit af pre-existing public-rolle policies
-
-
-
-Fra sidste session. Stadig relevant. Detaljer i CLAUDE.md "Kendt teknisk gæld"-sektion.
-
-
-
-\---
-
-
-
-\## Forventede prompts til næste session
-
-
-
-\### Sessionsstart-prompt (kopiér og brug)
-
-
-
-**---**
-
-
-
-**## Forventede prompts til næste session**
-
-
-
-**### Sessionsstart-prompt (kopiér og brug)**
-
-
-
-**Sidst opdateret:** 28. april 2026
-**Sidst aktive sessioner:** 22. april 2026 (env-konsolidering + organisations) og 28. april 2026 (bids-RLS-konsolidering)
-
-\---
+---
 
 ## Hvor vi står lige nu
 
-### ✅ Database-fundament i drift
+### ✅ Rute C færdig — API-kode opdateret til ny RLS-model
 
-Følgende migrations er pushed og verificeret mod remote Supabase (eu-north-1):
+Tre atomare commits pushed til lokal `cursor-automation` (ikke pushet til origin endnu):
 
-|Migration|Indhold|
-|-|-|
-|`20260417120000\_add\_active\_role\_and\_full\_name`|Pre-existing, registreret som applied via repair|
-|`20260417120001\_audit\_logs\_insert\_policy`|Service role INSERT-policy på audit\_logs|
-|`20260417120002\_organisations\_and\_membership`|Multi-tenant fundament|
-|`20260428143000\_bids\_consolidation`|Bids-RLS efter sikkerhedsaudit|
+| Commit | Indhold |
+|--------|---------|
+| `49a90e1` | bids/route.ts: fjern suppliers-lookup (C5), sæt created_by = supplier_id = auth.uid() |
+| `772a238` | types.ts sync + kaskade-fixes (authz.ts, supplier/page.tsx, BidEvaluationRow.tsx) |
+| `25e15d6` | evaluate/route.ts: thin RPC-wrapper omkring update_bid_status() — løser C1+C2 |
 
-### ✅ Database-tilstand
+### ✅ Smoke-test bestået mod ERST PREPROD (18. maj 2026)
 
-* 3 tabeller fra organisations-migrationen: `organisations`, `organisation\_types`, `organisation\_members`
-* 6 RPC-funktioner: 3 helper (get\_my\_\*\_organisation\_ids), 1 owner-trigger (on\_organisation\_created), 2 audit-triggers, 2 bids-relaterede (get\_bid\_metadata\_for\_tender, update\_bid\_status), 1 audit-trigger (audit\_bid\_change)
-* 14 RLS-policies på tværs af tabellerne
-* 1 enum: `organisation\_member\_role` (owner, admin, editor, viewer)
-* 3 seed-rækker i organisation\_types: housing\_association, municipality, public\_body\_other
+Funktionel test kørt med `--sdk-version auto`:
+- DKE3 (Krav 1.1): Validate 200 + Publish 200 — noticeId `03b9f5c8-bc63-4b30-8709-e71330053395`
+- DKE0 (Krav 1.2): Validate 200 + Publish 200 — noticeId `ff9a37d5-f711-4900-a16e-184d20b48c33`
+- Token-fetch: OK, expires_in 600s
+- Korrekt SDK-version format pr. 18. maj: `eforms-sdk-dk-1.13.0-1.3.0` (MED prefiks)
 
-### ✅ ERST-status
+### ✅ Tidligere arbejde stadig gyldigt
 
-* PREPROD-adgang permanent (bekræftet via mail 28. april)
-* PROD-adgang tildelt 28. april (afventer faktiske credentials)
-* Funktionel test bestået (commit b993e72: DKE3 og DKE0)
-* Ingen retest nødvendig ved interne datamodel-ændringer
+- Database-fundament: 4 migrations pushed
+- P1: Udbud.dk env-bevidst client med OIDC token-flow (5 commits, 13. maj)
+- ERST PREPROD-credentials virker, PROD-adgang tildelt
+- Funktionel test fra commit b993e72 stadig grøn (samme XML-payload-mønster)
 
-\---
+---
 
 ## Det vigtigste at vide før næste session
 
-### 🔴 PROD-credentials kan være landet siden sidst
+### 🔴 types.ts er stadig en håndskrevet stub
 
-Tjek mailboksen først. Hvis credentials er ankommet:
+Targeted patch i dag (commit `772a238`) fjernede de fejl der blokerede Rute C, men filen er stadig ikke auto-genereret. Den indeholder kun et subset af tabeller og kun 2 RPC'er.
 
-* De skal **ikke** sættes i `.env.local` før vi har lavet PROD/PREPROD-adskillelse
-* Risiko: utilsigtet publicering til den danske udbudsportal
+**Næste session bør starte med:**
+1. Generér personal access token på supabase.com/dashboard/account/tokens
+2. Sæt `$env:SUPABASE_ACCESS_TOKEN = "sbp_..."` i PowerShell
+3. Kør `npx supabase gen types typescript --project-id pupvcezanbwyhhewskcv --schema public > tmp/types.new.ts`
+4. Diff tmp/types.new.ts mod src/lib/supabase/types.ts og lav fuld regen i kontrolleret runde
 
-### 🔴 API-kode er IKKE opdateret til ny RLS-model
+Forventet kaskade: Adskillige filer vil få typefejl når der tilføjes streng typing. Skal håndteres systematisk.
 
-Den eksisterende kode i `src/app/api/bids/` bruger direkte `from('bids').select(...)` og `.update(...)`. Med ny RLS:
+### 🔴 P1's nye client er stadig ikke direkte runtime-testet
 
-* Buyer SELECT virker kun efter deadline (RLS blokerer før)
-* Buyer UPDATE er totalt blokeret — skal kalde `update\_bid\_status()` RPC
-* Pre-deadline metadata for buyer skal hentes via `get\_bid\_metadata\_for\_tender()` RPC
-* Bid-submission skal sætte `created\_by = auth.uid()` (ny kolonne, RLS kræver det)
+Smoke-test 18. maj brugte scriptets egen parallelle auth-implementation, ikke `udbud-dk-client.ts`. Den nye client er TypeScript-compileret men ikke runtime-verificeret. Risikoer dokumenteret som inspect-only audit-punkter (se nedenfor).
 
-**Konsekvens:** Hvis nogen prøver det eksisterende UI nu, vil flere flows fejle. Det er OK — tabellen er tom, ingen brugere — men UI'en skal opdateres før første kunde.
+### 🔴 Payload-format mismatch er stadig en blocker for service.ts → PROD
 
-### 🟠 Pre-existing teknisk gæld
+`UdbudDKPayload` returnerer fladt JSON, ERST forventer eForms UBL XML. service.ts har TODO. Payload-builder-rewrite (estimat 3-4 timer) udestår.
 
-Dokumenteret i CLAUDE.md (sektion "Kendt teknisk gæld — skal adresseres før produktion"):
+### 🟠 ERST-mail om søge-API afventer stadig
 
-* Pre-existing RLS-policies på `public`-rolle (audit\_logs, profiles, tender\_documents, tender\_questions, tenders) — ikke auditeret endnu
-* migrations\_old/-mappen ikke CLI-tracked
-* audit\_logs.actor\_type mangler dedikeret kolonne (midlertidigt i metadata.actor\_type)
-* tenders.organisation\_id mangler FK-constraint
-* tenders.status er fri TEXT-kolonne uden enum/CHECK-constraint
+`system@udbud.dk` — ingen svar pr. 18. maj. Brugeren forventer svar i denne uge.
 
-### 🟠 Suppliers-organisationsmodel mangler
+### 🟠 Compliance-status stadig usikker
 
-`bids.supplier\_id` peger lige nu på `auth.users(id)` direkte. Det skal i fremtidig migration ændres til at pege på en organisations-baseret model. Dette er kommenteret i `20260428143000\_bids\_consolidation.sql`.
+DPA'er, ZDR-aktivering, privatlivspolitik, vilkår, tilgængelighedserklæring — ikke berørt i dag.
 
-\---
+### 🟠 P1-relateret teknisk gæld identificeret 18. maj
+
+- `.env.local` token-URL mangler `?grant_type=client_credentials` — ERST kræver det som query-param (non-standard OIDC). Skal verificeres at `udbud-dk-client.ts` håndterer det korrekt
+- SDK-version-format-konsistens: ERST kræver `eforms-sdk-dk-1.13.0-1.3.0` (med prefiks). Hardcoded defaults uden prefiks vil fejle med 409
+
+---
 
 ## Næste session — prioriteret to-do
 
-### Prioritet 1: PROD/PREPROD-adskillelse (hvis PROD-credentials er landet)
+### Prioritet 1: Fuld regenerering af types.ts
 
-Konkret arbejde:
+Forudsætning for at undgå flere "håndskrevet stub er ude af sync"-fund. Estimat: 1-2 timer inkl. kaskade-fix.
 
-1. Verificer at `.env.local` adskiller `UDBUD\_DK\_PREPROD\_URL` fra `UDBUD\_DK\_PROD\_URL`
-2. Implementer en `getUdbudDkClient(env: 'preprod' | 'prod')`-funktion der eksplicit kræver miljø-valg
-3. Erstat alle direkte references til `UDBUD\_DK\_\*\_URL` med funktionskald
-4. Tilføj guard der forhindrer prod-kald i development-mode
-5. Opdatér src/lib/publication/service.ts til ny model
-6. Test at PREPROD stadig virker
+### Prioritet 2: P1-client audit
 
-Estimat: 1-2 timer fokuseret arbejde.
+Inspect-only verifikation af `udbud-dk-client.ts`:
+- Token-URL grant_type-håndtering (URL vs body)
+- SDK-version-format (med/uden prefiks)
+- Token-cache global mutable state-risiko
 
-### Prioritet 2: Compliance-status-tjek
+Estimat: 15-30 min. Kan kombineres med Prioritet 1.
 
-Brugeren tjekker selv:
+### Prioritet 3: UI-fixes (parkerede fra Rute C)
 
-* DPA med Anthropic — er den underskrevet? Er ZDR aktiveret?
-* DPA med Resend — er den underskrevet?
-* DPA med Supabase — er den underskrevet?
-* privatlivspolitik/-mappen — er filen udfyldt eller tom?
-* vilkaar/-mappen — er filen udfyldt eller tom?
-* Tilgængelighedserklæring — eksisterer den?
+- C3: `tenders/[id]/bids/page.tsx` — joiner mod ikke-eksisterende suppliers-tabel
+- C4: `buyer/page.tsx` — bid-counter altid 0 pre-deadline (kræver ny RPC `get_bid_counts_for_tenders` ELLER lazy-load per tender)
+- BidEvaluationRow: notes-UI stadig synlig men sender ikke til backend (parkeret indtil bid_evaluations-tabel designes)
 
-Status sendes til AI for vurdering af hvad der mangler.
+Estimat: 2-3 timer inkl. ny RPC-design.
 
-### Prioritet 3: API-kode opdateret til ny RLS-model
+### Prioritet 4: Payload-builder XML-rewrite
 
-Konkret arbejde:
+Som tidligere. Estimat: 3-4 timer.
 
-1. `src/app/api/bids/route.ts` — POST sætter `created\_by = user.id`, fjern fallback-bug
-2. Buyer-flow: erstat direkte bids-queries med `get\_bid\_metadata\_for\_tender()` RPC
-3. Buyer-evaluering: erstat direkte UPDATE med `update\_bid\_status()` RPC
-4. Kør `npx tsc --noEmit` og verificer ingen typefejl
-5. Manuel test af bid-submission og listing
+### Prioritet 5: Compliance-tjek
 
-Estimat: 2-3 timer fokuseret arbejde.
+Menneske-arbejde. Status-check af DPA'er, ZDR, juridisk indhold.
 
-### Prioritet 4: Suppliers-organisationsmodel
+### Prioritet 6: Suppliers-organisationsmodel + tender-evaluation orchestrator-RPC
 
-Større arkitekturarbejde. Kræver designsamtale før kode. Indebærer:
+`bids.supplier_id` peger pt. på `auth.users(id)` direkte. Nye RPC'er behøves: `award_bid(tender_id, winning_bid_id)` for atomisk vinder-håndtering. Designsamtale før kode.
 
-* Beslutte om suppliers er `organisations` med ny `type\_code`, eller separat tabel
-* Ny migration der tilføjer `bids.supplier\_organisation\_id`
-* Drop `bids.supplier\_id` FK til auth.users, erstat med organisationsreference
-* Opdater RLS-policies tilsvarende
+---
 
-Estimat: 3-5 timer inkl. design og review.
+## Designvalg låst i Rute C (18. maj)
 
-### Prioritet 5: Audit af pre-existing policies på public-rolle
+Disse beslutninger er nu kode og bør IKKE genåbnes uden eksplicit grund:
 
-For hver tabel med policies på `public`-rolle:
+- RPC = single source of truth for autorisering på evaluate-flow (intet dobbelt-check via assertTenderOwner)
+- Tender-state-opdatering (evaluation_started_at, evaluation_completed_at, awarded_bid_id) skrives IKKE fra evaluate-route. UI udleder state fra bids
+- Winner → bulk "mark losers as not_awarded" gøres IKKE atomisk fra evaluate-route. UI håndterer per-bid
+- evaluation_notes-feltet er droppet, ikke genintroduceret. Notes-UI er lokal state uden persistens indtil bid_evaluations-tabel designes
+- Status-whitelist for evaluator: under_evaluation, accepted, rejected, winner, not_awarded (5 værdier). Submitted og under_review er afvist via PATCH
+- SQLSTATE-mapping: 42501 → 403, 22023 → 400
+- URL-konsistens (bid hører til tender) check'es IKKE i evaluate-route. RPC autoriserer baseret på bid_id alene
+- getUserRole returnerer 'owner' for profiles.role='buyer' (bagudkompatibilitet)
+- getSupplierId returnerer userId direkte (supplier_id = user.id i ny model)
 
-1. Hent USING-klausuler via Supabase SQL Editor
-2. Vurder om de faktisk lækker
-3. Lav rettelses-migration hvis nødvendigt
+---
 
-Tabeller: audit\_logs, profiles, tender\_documents, tender\_questions, tenders.
+## Arbejdsmønstre — tilføjelse fra 18. maj
 
-Estimat: 2-4 timer.
+Tilføjelser til "Arbejdsmønstre der virker":
 
-\---
+1. **Auto-mode på funktionel test ved version-mismatch** — `--sdk-version auto` prober kandidater og finder accepteret format. Sparer fejlsøgning når ERST har skiftet accepteret SDK-version
+2. **Targeted patch frem for full regen** når full regen kræver auth-setup vi ikke har tid til — pragmatisk midtervej der løser konkret typing-problem uden kaskade-risiko
+3. **Sikkerhedsventil i estimat-overskridelse** — eksplicit valg mellem "fortsæt", "pragmatisk hybrid" eller "accept teknisk gæld" når budget overskrides. Disciplinen redder dagens leverance
 
-## Forventede prompts til Claude Code ved næste session
+Tilføjelser til "Arbejdsmønstre der IKKE virker":
 
-### Sessionsstart-prompt (kopiér og brug)
+1. ~~Acceptere Claude Code's `{ ... }`-forkortelser ved kodeinspect~~ — kræver eksplicit `cat`-output, ikke `view` der kun læser ind i Claude Code's kontekst
+2. ~~Antage at smoke-test-script reelt verificerer ny kode-sti uden at læse scriptet først~~ — scriptet havde parallel auth-implementation; testede ikke P1-client
 
-```
-Det er ny session. Læs CLAUDE.md og SESSION\_NOTES.md først, og bekræft kort at du har læst begge.
-
-Derefter:
-1. Kør `npm run check-db` og bekræft at fundamentet stadig virker
-2. Kør `git status` og rapportér tilstanden
-3. Bekræft at vi er på branch `cursor-automation` (eller anden hvis brugeren angiver)
-4. Spørg brugeren hvilken prioritet fra to-do-listen vi tager først
-
-STOP og afvent valg af prioritet før du går i gang med konkret arbejde.
-```
-
-\---
-
-## Arbejdsmønstre der virker (lærdom fra session 22.-28. april)
-
-1. **Eksplicit STOP mellem hver kritisk fase** — verificer før eksekvering
-2. **Vis hele filer ved review, ikke "Read 1 file"** — diff-snippets er ikke nok til security-arbejde
-3. **Manuel verifikation i Supabase Studio efter migration** — PostgREST har begrænsninger på system-schemas
-4. **Atomare commits per logisk enhed** — gør revert nemmere
-5. **Designsamtale i denne tråd, kode-skrivning i Claude Code** — separation of concerns
-
-## Arbejdsmønstre der IKKE virker
-
-1. ~~"Køre på" uden review når noget virker tilsyneladende~~ — leder til opdagelser som "read bids" USING (true) og to-konventions-rod
-2. ~~Lade AI eksekvere SQL fra review-snippets~~ — de er illustrationer, ikke køreklar SQL
-3. ~~Bruge inline heredoc med variabel-substitution i bash~~ — fanges af security-prompts og er svære at debugge
-4. ~~Acceptere "Read 1 file (ctrl+o to expand)"-output ved security-review~~ — vi skal se SQL'en
-
-\---
-
-## Kontekst-noter
-
-* **Pilotkunde-mål:** 1-2 måneder, ambitionen er en mindre boligorganisation via BL eller KAB, eller DSB (long shot)
-* **Compliance før brugere:** brugeren accepterer ikke at åbne for kunder før compliance er på plads
-* **AI-evaluering:** ikke kritisk vej, tilvalg, kommer senere
-* **Branch-strategi:** stadig på `cursor-automation` — overvej at skifte til `main` med PR-flow når MVP er klar
+---
 
 ## Kommunikationspræferencer
 
-* Dansk hvor muligt
-* Brutal ærlighed, ingen ekkokammer
-* Markér eksplicit hvad der kan delegeres til Claude Code vs. menneske-kun
-* Strategiske beslutninger ligger hos mennesket
-* Push og commit-beslutninger ligger hos mennesket
-
-
-
-
-
+Uændret. Dansk, brutal ærlighed, eksplicit STOP-punkter, push og commit-beslutninger hos mennesket.
