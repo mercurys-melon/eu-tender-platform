@@ -29,7 +29,10 @@ const statusOptions: { value: BidStatus; label: string }[] = [
 
 export function BidEvaluationRow({ bid, tenderId, isWinner, onUpdate }: BidEvaluationRowProps) {
   const [status, setStatus] = useState<BidStatus>(bid.status as BidStatus)
-  const [notes, setNotes] = useState(bid.evaluation_notes || '')
+  // bid.evaluation_notes-kolonnen er droppet i migration 20260428143000.
+  // Notes-UI'en bevares som lokal state indtil bid_evaluations-tabel er designet
+  // — handleStatusChange sender alligevel ikke notes i PATCH-body'en i dag.
+  const [notes, setNotes] = useState('')
   const [showNotes, setShowNotes] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)

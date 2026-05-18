@@ -38,10 +38,10 @@ export interface Database {
       }
       bids: {
         Row: {
-          id: string; tender_id: string; supplier_id: string;
+          id: string; tender_id: string; supplier_id: string; created_by: string | null;
           amount: number | null; currency: string | null; documents: string[] | null;
           status: 'submitted'|'under_review'|'under_evaluation'|'accepted'|'rejected'|'winner'|'not_awarded';
-          evaluation_notes: string | null; submitted_at: string | null; created_at: string; updated_at: string | null;
+          submitted_at: string | null; created_at: string; updated_at: string | null;
         }
         Insert: Partial<Database['public']['Tables']['bids']['Row']> & { tender_id: string; supplier_id: string }
         Update: Partial<Database['public']['Tables']['bids']['Row']>
@@ -101,12 +101,6 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['tender_participants']['Row']>
         Relationships: []
       }
-      suppliers: {
-        Row: { id: string; user_id: string; company_name: string | null; cvr: string | null; created_at: string }
-        Insert: { id?: string; user_id: string; company_name?: string | null; cvr?: string | null; created_at?: string }
-        Update: Partial<Database['public']['Tables']['suppliers']['Row']>
-        Relationships: []
-      }
       publication_jobs: {
         Row: {
           id: string; tender_id: string; status: 'pending' | 'processing' | 'completed' | 'failed' | 'retrying';
@@ -125,8 +119,21 @@ export interface Database {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
-    }
+        update_bid_status: {
+          Args: { p_bid_id: string; p_new_status: string }
+          Returns: Database['public']['Tables']['bids']['Row']
+        }
+        get_bid_metadata_for_tender: {
+          Args: { p_tender_id: string }
+          Returns: {
+            bid_id: string
+            supplier_id: string
+            submitted_at: string
+            status: string
+            created_at: string
+          }[]
+        }
+      }
     Enums: {
       [_ in never]: never
     }

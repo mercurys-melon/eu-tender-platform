@@ -17,36 +17,24 @@ export async function assertTenderOwner(userId: string, tenderId: string): Promi
 }
 
 export async function getUserRole(userId: string): Promise<'owner' | 'supplier' | 'anonymous'> {
-  const supabase = createClient()
-  
-  // Check if user is authenticated
   if (!userId) {
     return 'anonymous'
   }
-
-  // Check if user is a supplier
-  const { data: supplier } = await supabase
-    .from('suppliers')
-    .select('id')
-    .eq('user_id', userId)
+  const supabase = createClient()
+  // Roller udledes nu fra profiles.role (migration 20260417120000).
+  // 'buyer' i profiles mapper til 'owner' i denne funktion for bagudkompatibilitet
+  // med eksisterende call-sites. Terminologi-skift udskudt til senere refaktor.
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
     .single()
-
-  if (supplier) {
+  if (profile?.role === 'supplier') {
     return 'supplier'
   }
-
-  // Check if user owns any tenders (is an entity)
-  const { data: tender } = await supabase
-    .from('tenders')
-    .select('id')
-    .eq('entity_id', userId)
-    .limit(1)
-    .single()
-
-  if (tender) {
+  if (profile?.role === 'buyer') {
     return 'owner'
   }
-
   return 'anonymous'
 }
 

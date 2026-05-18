@@ -36,15 +36,12 @@ interface MyParticipation {
 }
 
 async function getSupplierId(userId: string): Promise<string | null> {
-  const supabase = createClient()
-
-  const { data: supplier } = await supabase
-    .from('suppliers')
-    .select('id')
-    .eq('user_id', userId)
-    .maybeSingle()
-
-  return supplier?.id || null
+  // Med ny RLS-model (migration 20260428143000) er bids.supplier_id en
+  // direkte FK til auth.users.id — supplierId og userId er det samme.
+  // Suppliers-tabellen er droppet; funktionssignatur bevares for
+  // bagudkompatibilitet med call-sites indtil supplier-organisationsmodellen
+  // er designet.
+  return userId
 }
 
 async function getOpenTenders(supplierId: string | null): Promise<OpenTender[]> {
