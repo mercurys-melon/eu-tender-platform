@@ -43,9 +43,9 @@
   </ext:UBLExtensions>
   <cbc:UBLVersionID>2.3</cbc:UBLVersionID>
   <cbc:CustomizationID>eforms-sdk-dk-1.13.0-1.3.0</cbc:CustomizationID>
-  <cbc:ID schemeName="notice-id">70ccfd5e-62c5-45cf-88ca-95b8a3b71aba</cbc:ID>
-  <cbc:ContractFolderID>03cbffc8-33ae-4b9d-9127-ff15eab51c8e</cbc:ContractFolderID>
-  <cbc:IssueDate>2026-04-15</cbc:IssueDate>
+  <cbc:ID schemeName="notice-id">9af0057d-5f45-4e4a-9d01-0ba05370c200</cbc:ID>
+  <cbc:ContractFolderID>aac31b9c-55ec-4877-9e3f-06add67e0abe</cbc:ContractFolderID>
+  <cbc:IssueDate>2026-05-18</cbc:IssueDate>
   <cbc:IssueTime>12:00:00</cbc:IssueTime>
   <cbc:NoticeTypeCode listName="competition">cn-standard</cbc:NoticeTypeCode>
   <cbc:NoticeLanguageCode>DAN</cbc:NoticeLanguageCode>
@@ -88,7 +88,7 @@
     <cac:TenderingProcess>
       <cbc:ProcedureCode listName="procurement-procedure-type">open</cbc:ProcedureCode>
       <cac:TenderSubmissionDeadlinePeriod>
-        <cbc:EndDate>2026-05-15+02:00</cbc:EndDate>
+        <cbc:EndDate>2026-06-17+02:00</cbc:EndDate>
         <cbc:EndTime>12:00:00+02:00</cbc:EndTime>
       </cac:TenderSubmissionDeadlinePeriod>
     </cac:TenderingProcess>
