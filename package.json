@@ -20,7 +20,8 @@
     "test:report": "node scripts/powercell-report.mjs",
     "test:local": "node scripts/dev-test-run.mjs",
     "udbud:functional-test": "node scripts/run-from-repo-root.mjs && node scripts/udbud-functional-test.mjs",
-    "check-db": "tsx scripts/check-db.ts"
+    "check-db": "tsx scripts/check-db.ts",
+    "db:types": "supabase gen types typescript --linked --schema public > src/lib/supabase/types.ts"
   },
   "keywords": [
     "blockbid",

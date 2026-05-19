@@ -69,12 +69,6 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['tender_documents']['Row']>
         Relationships: []
       }
-      leads: {
-        Row: { id: string; name: string; email: string; company: string; message: string; source: string | null; created_at: string }
-        Insert: Partial<Database['public']['Tables']['leads']['Row']> & { name: string; email: string; company: string; message: string }
-        Update: Partial<Database['public']['Tables']['leads']['Row']>
-        Relationships: []
-      }
       profiles: {
         Row: {
           id: string
