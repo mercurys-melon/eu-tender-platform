@@ -2,182 +2,279 @@
 
 Denne fil bevares som kontinuitet mellem AI-assisterede arbejdssessioner. Læs den ved start af hver ny session sammen med CLAUDE.md.
 
-**Sidst opdateret:** 19. maj 2026
-**Sidst aktive session:** 19. maj 2026 (Schema-drift identificeret + P1-client audit + branch-rename)
+**Sidst opdateret:** 20. maj 2026
+**Sidst aktive session:** 20. maj 2026 (Schema-design fase 1 — 6 design-beslutninger + scripts/gen-types.mjs)
 
 ---
 
 ## Hvor vi står lige nu
 
-### ✅ Branch-rename gennemført
+### ✅ 20. maj — Schema-design fase 1 gennemført
 
-`cursor-automation` er fast-forward merget til `main` og slettet. GitHub default er `main` (uændret). Alle 28 commits er bevaret med samme SHA-hashes. Cosmetic note: Cursor's initial commit `c157919` ("Opdateret projekt med nye features og struktur") ligger stadig som ancestor i historikken — ikke værd at omskrive.
+6 design-beslutninger truffet for de problematiske stub-referencer identificeret 19. maj. Ingen migrationer skrevet, ingen kode rørt — kun designsamtale med eksplicitte beslutninger. Detaljeret i sektionen "Dagens designbeslutninger" nedenfor.
 
-### ✅ types.ts er bragt i sync med faktisk remote schema
+**Plus tilføjet til arbejdsliste:** Reference #8 (fasekonkluderende meddelelser/tildelingsbreve) opstod under #3-diskussionen og designes næste session efter #5-fundament er på plads.
 
-`src/lib/supabase/types.ts` afspejler nu de 9 BASE TABLES der faktisk findes i remote public schema:
-- `audit_logs`, `bids`, `organisation_members`, `organisation_types`, `organisations`, `profiles`, `tender_documents`, `tender_questions`, `tenders`
+### ✅ 20. maj — scripts/gen-types.mjs (commit 482814b)
 
-Forberedelses-infrastruktur etableret:
-- `npm run db:types` script i `package.json` (Supabase CLI-linket)
-- Supabase-projekt linket via `npx supabase link --project-ref pupvcezanbwyhhewskcv`
-- `supabase/.temp/` er gitignored
-- Alle 7 lokale migrations bekræftet synkrone med remote via `npx supabase migration list`
+`db:types`-scriptet virker nu uden BOM-problem:
+- `scripts/gen-types.mjs` (83 linjer) spawner Supabase CLI og skriver via `fs.writeFileSync` med eksplicit UTF-8-encoding
+- `package.json`: `npm run db:types` skriver direkte til `src/lib/supabase/types.ts`; `npm run db:types:dry` skriver til `tmp/types.new.ts` for review-først-flow
+- Verificeret 20. maj: dry-run producerede 17484 bytes / 592 linjer, første 3 bytes 101 120 112 (= "exp"), ingen BOM
+- Sanity-check fangede `npx`-installations-prompt på første kørsel (regex afviste "Need to install the following") — defensiv kode bestod første test
+- Pushed til origin/main
 
-**ADVARSEL:** `npm run db:types` har endnu ikke håndteret PowerShell's UTF-16 BOM-encoding-fælde. Næste regen skal ske via `tsx scripts/gen-types.ts`-shim eller manuelt med `Out-File -Encoding utf8NoBOM`. Scriptet i package.json er forberedelse, ikke produktionsklar.
+### 🔴 src/lib/supabase/types.ts er STADIG den håndskrevne stub
 
-### ✅ P1-client audit gennemført
+Diff mellem den genererede `tmp/types.new.ts` og nuværende `src/lib/supabase/types.ts` viste at sidstnævnte stadig er stub-formatet fra Cursor-perioden, inkl. fiktive tabeller (`tender_participants`, `publication_jobs`) og fiktive kolonner (`awarded_bid_id`, `evaluation_documents`, `prequalification_deadline`, `evaluation_started_at`, `evaluation_completed_at`).
 
-Inspect-only audit af `udbud-dk-client.ts` + `env.ts` + `.env.example`. Resultater dokumenteret i `docs/P1-CLIENT-AUDIT-2026-05-19.md`.
+**Korrektion af tidligere SESSION_NOTES-formulering:** "types.ts nu i sync med faktisk remote (9 BASE TABLES)" var ikke korrekt. 19. maj-arbejdet endte med targeted patch (commit 772a238 i Rute C), ikke fuld regenerering. Stub'en lever stadig — det er præcis det Prioritet 1 til næste session adresserer.
 
-**Sammenfatning:** Ingen 🔴-kritiske bugs. 8 ⚠️-bemærkninger der hver isoleret er små, tilsammen tegner billede af "fungerende prototype 80% til produktion". Pre-PROD-ready estimat: ~2-3 timer fokuseret arbejde på P0+P1-items.
+### ✅ Smoke-test bestået mod ERST PREPROD (18. maj 2026)
 
-### 🔴 Schema-drift identificeret 19. maj — kritisk fund
-
-Stub'en `types.ts` (Cursor-arv) indeholdt **fiktive tabeller** og **fiktive kolonner** der aldrig blev oprettet i remote schema:
-
-**Fantom-tabeller (bekræftet via pg_class — eksisterer ingen steder):**
-- `leads` — fjernet sammen med `src/app/api/leads/route.ts` (ingen anden brug)
-- `publication_jobs` — refereret aktivt i `src/lib/publication/service.ts` (4 linjer)
-- `tender_participants` — refereret aktivt i `src/app/supplier/page.tsx` (2 linjer) + `src/app/buyer/page.tsx` (1 linje)
-
-**Fantom-kolonner på `tenders` (bekræftet via gen types output):**
-- `evaluation_documents` — refereret i `src/app/api/tenders/[id]/evaluation-documents/route.ts` + `src/app/tenders/[id]/bids/page.tsx`
-- `prequalification_deadline` — refereret i `buyer/page.tsx`
-- `awarded_bid_id` — refereret i `tenders/[id]/bids/page.tsx`. **Modstrider Rute C-beslutning** (18. maj): "UI udleder state fra bids" — kolonnen bør IKKE eksistere
-
-**Andre drift-symptomer:**
-- `supplier_status`-kolonne refereret som join-resultat i supplier/buyer-flow
-- `profiles.active_role` enum-stramning afslørede string-assignment-issues i `src/app/(app)/layout.tsx`
-
-**Hvad det betyder:** Følgende kode-stier kompilerede men har **aldrig fungeret i runtime** mod faktisk database:
-- `src/app/supplier/page.tsx` — supplier-dashboard
-- `src/app/buyer/page.tsx` — buyer-dashboard  
-- `src/lib/publication/service.ts` (delvist — publication_jobs-referencer)
-- `src/app/api/tenders/[id]/evaluation-documents/route.ts`
-- `src/app/tenders/[id]/bids/page.tsx`
-
-**Beslutning truffet 19. maj:** Fortolkning 2 — vi designer schema og kode rigtigt over flere sessioner. Ingen quick-fixes. Vi accepterer at pilot 8. juni potentielt skubbes.
+Funktionel test kørt med `--sdk-version auto`:
+- DKE3 (Krav 1.1): Validate 200 + Publish 200 — noticeId `03b9f5c8-bc63-4b30-8709-e71330053395`
+- DKE0 (Krav 1.2): Validate 200 + Publish 200 — noticeId `ff9a37d5-f711-4900-a16e-184d20b48c33`
+- Token-fetch: OK, expires_in 600s
+- Korrekt SDK-version format pr. 18. maj: `eforms-sdk-dk-1.13.0-1.3.0` (MED prefiks)
 
 ### ✅ Tidligere arbejde stadig gyldigt
 
-- Database-fundament: 7 migrations synkrone med remote (verificeret 19. maj)
-- P1: Udbud.dk env-bevidst client (auditeret 19. maj, fungerer som intended for nuværende use case)
+- Database-fundament: 4 migrations pushed
+- P1: Udbud.dk env-bevidst client med OIDC token-flow (5 commits, 13. maj)
 - ERST PREPROD-credentials virker, PROD-adgang tildelt
-- Funktionel test fra commit b993e72 stadig grøn (smoketest 18. maj bekræftet med eforms-sdk-dk-1.13.0-1.3.0)
+- P1-client audit gennemført 19. maj (8 ⚠️-fund, ingen 🔴-kritiske bugs, dokumenteret i `docs/P1-CLIENT-AUDIT-2026-05-19.md`)
+- Rute C færdig (commits 49a90e1, 772a238, 25e15d6 — 18. maj)
+- Branch `cursor-automation` slettet, main er nu primær (28 commits bevaret via fast-forward, 19. maj)
+
+---
+
+## Dagens designbeslutninger (20. maj)
+
+Disse 6 beslutninger er låst medmindre ny væsentlig evidens dukker op. Formuleres formelt i `docs/SCHEMA-DESIGN.md` næste session.
+
+### Beslutning #1 (`leads`): A — Ikke platform-concern
+
+Lead-capture eksisterer ikke som platformkoncept. Henvendelser fra potentielle kunder håndteres via email indtil videre. Ingen tabel, ingen route, ingen tilbagevenden uden eksplicit ny brugerhistorie.
+
+### Beslutning #2 (`publication_jobs`/`publication_log`): A — Audit-log + status-felter
+
+Bekræftet via Supabase Dashboard SQL Editor 20. maj: hverken `publication_jobs` eller `publication_log` eksisterer som BASE TABLE. Begge var stub-tænkning.
+
+**Ny tabel:** `publication_events` (immutable append-only audit-log): `tender_id`, `event_type`, `notice_id`, `sdk_version`, `request_payload_hash`, `response_status`, `response_body`, `error_message`, `environment` (preprod/prod), `created_at`, `created_by`.
+
+**Status på `tenders`:** Nye kolonner `publication_status`, `notice_id`, `notice_version`, `published_at`, `last_publication_attempt_at`.
+
+Ingen queue-tabel. Retry sker synkront eller via simpel cron. Forward-compatible — kan udvides til job-queue model senere uden datamigration.
+
+### Beslutning #3 (`evaluation_documents`): B — Separat tabel, frivilligt felt
+
+**Ny tabel:** `evaluation_documents` — kun ordregivers interne arbejdsdokumenter (scoreark, mødereferater, beslutningsnotater, evalueringsrapporter, indstillingsnotater). Tilbudsgivere kan aldrig se denne tabel.
+
+**Udvider eksisterende `tender_documents`:** Med `document_type`-enum (`procurement_material`, `evaluation_method`, `contract_draft`, `appendix`, `clarification`).
+
+**Vigtig scope-låsning:** evaluation_documents er **frivilligt** — ingen NOT NULL-constraints, intet workflow blokerer for tildeling hvis tabellen er tom. Praktikere bruger ofte Excel lokalt; platformen tvinger ikke skift.
+
+Udgående meddelelser (tildelingsbreve etc.) hører IKKE i `evaluation_documents` — separat reference #8.
+
+### Beslutning #4 (`prequalification_deadline`): B — Separat `tender_phases`-tabel
+
+**Ny tabel:** `tender_phases` med `tender_id`, `phase_type` (enum), `deadline` (nullable), `sequence_number`, `is_active`, `completed_at`, `notes`.
+
+**Procedurer i v1:**
+- Offentligt udbud: 1 tilbudsfase
+- Begrænset udbud: 1 pq-fase + 1 tilbudsfase
+- Udbud med forhandling: 1 pq-fase + 1+x tilbudsfaser (justérbart undervejs)
+- Annonceringsudbud under tærsklen: 1 fase
+
+**Senere udvidelser:** Konkurrencepræget dialog (samme struktur som forhandling), kvalifikationsordning (1 pq-fase **uden deadline** — derfor nullable).
+
+**Implikationer:**
+- Faser kan tilføjes EFTER publication (forhandling kan udvide med tilbudsrunder) — ingen "frys faser ved publicering"-constraint. Tilføjelser skal være journaliseringspligtige.
+- Standstill modelleres som fase (`phase_type = 'standstill'`), ikke separat mekanisme.
+- Fristberegning-logik (à la fristberegneren.dk) hører naturligt på fase-objekter.
+
+### Beslutning #5 (`tender_participants` + `supplier_status`): Udfald 2 — Fuld virksomhedsmodel ⚠️ RUTE C-GENÅBNING
+
+**Nye tabeller:**
+- `supplier_organisations` (CVR-baseret)
+- `supplier_organisation_users` (mange-til-mange — en user kan tilhøre flere virksomheder)
+- `tender_participants` — deltagelse i udbud knyttet til virksomhed, ikke person
+
+**Refaktor af bids:**
+- `bids.supplier_id` ændres til `supplier_organisation_id`
+- `getSupplierId()` returnerer org-id, ikke user.id
+- `update_bid_status`-RPC opdateres så autorisation tjekker `supplier_organisation_users`
+
+**User-handlinger logges i audit_log:** `tender_participants` har de strukturelle felter (status, timestamps) uden user-felt. Hver handling/state-ændring logges i `audit_log` med både `supplier_organisation_id` og handlende `user_id`. UI viser primært virksomhed; user-detalje via audit-log-drilldown.
+
+**Rute C-konflikt:** 18. maj-beslutning *"supplier_id = user.id i ny model"* genåbnes. Begrundelse: pq-ansøgninger kræver virksomhedsmodel; ESPD er CVR-baseret; konkurrentparitet kræver flere users per virksomhed; almene boligselskaber forventer virksomheds-visning. Rute C-RPC'er omskrives ikke — kun autorisations-tjek i `update_bid_status` opdateres.
+
+**MitID Erhverv-verifikation udskudt** til efter v1 — brugeren indtaster CVR uden verifikation indtil videre.
+
+### Beslutning #6 (`awarded_bid_id`): Udfald 2 — Eksplicit på `tender_lots` + `award_bid`-RPC ⚠️ RUTE C-GENÅBNING
+
+**Ny kolonne:** `tender_lots.awarded_bid_id` (nullable, FK til `bids.id`).
+
+**Ny RPC:** `award_bid(tender_lot_id, bid_id)` — eneste vej til vinder-markering. Opdaterer atomisk:
+- `tender_lots.awarded_bid_id`
+- `bids.status = 'winner'` for vinder
+- `bids.status = 'not_awarded'` for øvrige bids på lot'en
+
+**Implikation for `update_bid_status`:** Direkte 'winner'-overgang afvises. Evaluator-flow gennem RPC, ikke direkte tabel-opdateringer.
+
+**Implikation for udbud uden delaftaler:** Implementeres som "udbud med præcis én lot". Industri-standard pattern.
+
+**Rute C-konflikt:** 18. maj-beslutninger *"Tender-state-opdatering ... skrives IKKE fra evaluate-route. UI udleder state fra bids"* og *"Winner → bulk mark losers as not_awarded gøres IKKE atomisk fra evaluate-route. UI håndterer per-bid"* genåbnes.
+
+**Begrundelse for genåbning:** Tre forhold ændrer arkitekturkonteksten siden 18. maj:
+1. `tender_phases` (#4) gør tildeling til distinkt fase, ikke status-ændring
+2. Tildelingsbreve (#8) kræver atomisk vinder-identifikation for korrekt brev-generering
+3. Delaftaler gør "vinder per udbud" til misvisende koncept; vinder per lot er rigtig granularitet
+
+**Hvad bevares fra Rute C:** `bids.status` forbliver sandhedskilde for individuelle bid-states. `update_bid_status`-RPC bevarer sin rolle for evaluerings-statuser (`under_evaluation`, `accepted`, `rejected`). Klage-håndtering: `cancel_award`-RPC kan revertere uden at slette bids — audit-trail bevares.
+
+### Reference #8 (tilføjet til arbejdsliste): Fasekonkluderende meddelelser
+
+Designes næste session (efter #5-fundament er på plads).
+
+**Dækker:** Tildelingsbrev (§ 171), prækvalifikationsbeslutning (§ 170), annullering, standstill-afslutning.
+
+**Særkender:** Per-modtager personaliseret, samtidig udsendelse (ligebehandlingsprincippet), juridisk virkende (udløser standstill, klagefrist), modtagelses-status bevisbar.
+
+**Standstill-feature:** Skal eksistere på platformen. Manuel ved pilot hvis kompleks. Fristberegning kan senere kopiere `fristberegneren.dk`-logik (dansk udbudsret-frist-matematik er ikke triviel — fortjener separat design-spor).
 
 ---
 
 ## Det vigtigste at vide før næste session
 
-### 🔴 Schema-design er det største ikke-løste problem
+### 🔴 Hovedopgave næste session: Skriv `docs/SCHEMA-DESIGN.md`
 
-Vi ved hvad der mangler, men ikke hvordan det skal designes. Kommende sessioner skal designe:
+Format: ét langt dokument med struktur per reference (status, konflikt-risiko, kode-referencer, brugerhistorie, designvalg, beslutning, opfølgning). Plus cross-cutting sektion med migrations-rækkefølge.
 
-1. **`tender_participants`** — Hvad er user story? Erstatning via `organisation_members` + status-kolonne på `bids`? Eller separat kobling?
-2. **`publication_jobs`** — Async queue med worker-process, eller simpel audit-log af publikationsforsøg? Hvor er worker'en?
-3. **`evaluation_documents` på `tenders`** — Array-kolonne eller separat `tender_evaluation_documents`-tabel?
-4. **`awarded_bid_id` på `tenders`** — Skal modstride Rute C-beslutning, eller skal koden i `tenders/[id]/bids/page.tsx` refaktoreres til at udlede vinder fra `bids.status='winner'`?
-5. **`prequalification_deadline`** — Separat fase-tabel eller kolonne på tenders?
-6. **`supplier_status`** — Hvor skal det leve? På bids? På en relation-tabel?
-7. **`leads`** — Slettet i denne session. Hvis lead-capture skal eksistere, skal det designes fra bunden.
+Output skal være låst dokument der kan bruges som grundlag for migrations-skrivning ugen efter.
 
-Hver af disse er en arkitekturbeslutning. Frank har bekræftet at ingen erindring om hvad disse skulle være — det er rent Cursor-arv.
+### 🔴 Faktisk types.ts-regenerering er STADIG udestående
 
-### 🔴 P1-client har 8 ⚠️-fund — se `docs/P1-CLIENT-AUDIT-2026-05-19.md`
+`db:types`-scriptet virker — men selve regenereringen er ikke kørt mod `src/lib/supabase/types.ts`. Den nuværende stub indeholder stadig fiktive tabeller. Kaskade-håndtering kræver dedikeret scope og bør sandsynligvis vente til EFTER migrationer er kørt for de nye tabeller fra schema-design.
 
-P0+P1-items (fix før PROD): Token-URL validering, SDK-version stramning, PROD-guard tredje lag, deprecated env warnings, pino-migration, correlation-id. Total estimat 2-3 timer.
+**Forventet rækkefølge:**
+1. `docs/SCHEMA-DESIGN.md` færdig (næste session)
+2. Migrationer skrives og testes
+3. Migrationer pushes til remote
+4. `npm run db:types` regenererer mod nyt schema
+5. Kaskade-fix i src/
 
-### 🟠 db:types-script er ikke produktionsklar
+### 🔴 P1's nye client er stadig ikke direkte runtime-testet
 
-PowerShell's `>` redirect skriver UTF-16 LE med BOM. Scriptet `"db:types": "supabase gen types typescript --linked --schema public > src/lib/supabase/types.ts"` vil producere korrupt fil ved næste kørsel. Workaround: brug `tsx scripts/gen-types.ts`-shim eller manuel `Out-File`. Skal fixes inden næste regen.
+Smoke-test 18. maj brugte scriptets egen parallelle auth-implementation, ikke `udbud-dk-client.ts`. Audit-punkter dokumenteret i `docs/P1-CLIENT-AUDIT-2026-05-19.md`. Pre-PROD estimat 2-3 timer. Ikke kritisk før vi har schema klart.
 
-### 🟠 ERST-mail om søge-API afventer stadig
+### 🔴 Payload-format mismatch er stadig blocker for service.ts → PROD
 
-`system@udbud.dk` — ingen svar pr. 19. maj.
+`UdbudDKPayload` returnerer fladt JSON, ERST forventer eForms UBL XML. service.ts har TODO. Payload-builder-rewrite (estimat 3-4 timer) udestår. Bør tackles før første reelle PROD-publicering.
 
-### 🟠 Compliance-status uændret
+### 🟠 ERST-mail om søge-API afventer
 
-DPA'er, ZDR-aktivering, privatlivspolitik, vilkår, tilgængelighedserklæring — ikke berørt 19. maj.
+`system@udbud.dk` — rykket 20. maj. Intet svar pr. 20. maj.
 
-### 🟠 Innobooster deadline-tjek udestår
+### 🟠 Pilot 8. juni-realisme
 
-Frank skal verificere eksakt deadline-dato på innovationsfonden.dk og afgøre om maj-runden eller september-runden er realistisk. ~30 min beslutnings-arbejde uden for sessionen.
+Pilot er presset men ikke automatisk umuligt. Implementeringsfasen kan tidligst begynde efter SCHEMA-DESIGN.md er låst og første migrationer kørt. Realistisk arbejdsplan:
+- 21-23. maj: SCHEMA-DESIGN.md + reference #8-design
+- 24-31. maj: Migrationer + tests
+- 1-7. juni: Faktisk types.ts-regenerering + kaskade-fix + UI-arbejde
+- 8. juni: Pilot-møde
 
-### 🟠 P1-relateret teknisk gæld identificeret 18. maj — opdateret status 19. maj
+Hvis nogen af disse blokke glider, skubbes pilot. Aktiv overvågning af scope og energi-niveau er obligatorisk.
 
-- `.env.local` token-URL: **bekræftet korrekt** at den indeholder `?grant_type=client_credentials` (PREPROD funktionel test bestået). Issue var fraværet af validation der ville fange fejlen — adresseret som audit-fund ①
-- SDK-version-format-konsistens: **bekræftet konsistent** (alle reelle referencer bruger fuldt format) — adresseret som audit-fund ②
+### 🟠 Innobooster periode 3: åbner 27. maj, lukker 6. august 2026
+
+Verificeret 20. maj. Optimal timing — ikke akut press lige nu, men deadline er konkret. Bør dedikere session til ansøgningsarbejde i juni når pilot er overstået. Kapital-injektion-status til ApS (100.000 DKK-tærskel) skal verificeres som del af ansøgningsforberedelse.
+
+### 🟠 Compliance-status stadig usikker
+
+DPA'er, ZDR-aktivering, privatlivspolitik, vilkår, tilgængelighedserklæring — ikke berørt 20. maj. Påkrævet før onboarding af reelle brugere.
 
 ---
 
 ## Næste session — prioriteret to-do
 
-### Prioritet 1: Schema-design (flere sessioner)
+### Prioritet 1: Skriv `docs/SCHEMA-DESIGN.md`
 
-Designsamtale per problematisk reference (se "Schema-design" ovenfor). Outputtet er et `docs/SCHEMA-DESIGN.md` der beskriver hver tabel og hver kolonne med begrundelse, før migrationer skrives. Ingen kode i denne fase.
+Med dagens 6 beslutninger + skitse for #8. Estimat: 2-3 timer. Skal være kompletteret før migrationer påbegyndes.
 
-Estimat: 2-4 sessioner over 1-2 uger.
+### Prioritet 2: Reference #8-designsamtale (fasekonkluderende meddelelser)
 
-### Prioritet 2: Migration-skriving (separate sessioner per logisk gruppe)
+Tildelingsbreve, prækvalifikationsbeslutninger, annullering, standstill-afslutning. Estimat: 45-60 min når #5-virksomhedsmodel er låst som grundlag. Indlejres i SCHEMA-DESIGN.md.
 
-Med design-dokumentet skrives migrationer. Hver migration reviewes, godkendes, køres mod PREPROD, derefter remote. Estimat: 1 session per migration-gruppe.
+### Prioritet 3: P1-client audit-opfølgning
 
-### Prioritet 3: Regen + kaskade-cleanup
+Inspect-only verifikation af `udbud-dk-client.ts` (token-URL grant_type, SDK-version-format, token-cache global mutable state). Detaljeret i `docs/P1-CLIENT-AUDIT-2026-05-19.md`. Estimat: 15-30 min.
 
-Når migrationer er pushet, regenereres types.ts. Forventet rent build hvis design er rigtigt. Estimat: 1 session.
+### Prioritet 4: UI-fixes (parkerede fra Rute C)
 
-### Prioritet 4: P1-client P0+P1-fixes
+Nu med ny kontekst fra #5/#6-beslutninger:
+- C3: `tenders/[id]/bids/page.tsx` — joiner mod ikke-eksisterende suppliers-tabel; refaktor til `supplier_organisations`
+- C4: `buyer/page.tsx` — bid-counter altid 0 pre-deadline (ny RPC `get_bid_counts_for_tenders` eller lazy-load per tender)
+- BidEvaluationRow: notes-UI stadig synlig men sender ikke til backend (parkeret indtil bid_evaluations-tabel designes)
 
-Implementér de 6 P0+P1-items fra `docs/P1-CLIENT-AUDIT-2026-05-19.md`. Estimat: 2-3 timer i én session.
+Estimat: 2-3 timer inkl. ny RPC-design.
 
-### Prioritet 5: Pre-pilot tasks
+### Prioritet 5: Payload-builder XML-rewrite
 
-- db:types-script fix (UTF-8 BOM workaround) — 30 min
-- UI-skelet med shadcn/ui (oprindeligt planlagt til 20. maj, udskudt) — ikke estimeret
-- Auth-UI verification mod Server Actions-refaktor — ikke estimeret
+`UdbudDKPayload` → eForms UBL XML. Estimat: 3-4 timer.
 
-### Prioritet 6: Compliance + Innobooster (eksternt arbejde)
+### Prioritet 6: Compliance-tjek
 
-Menneske-arbejde. Status-check af DPA'er, ZDR, juridisk indhold. Innobooster deadline-vurdering.
-
----
-
-## Arbejdsmønstre — tilføjelse fra 19. maj
-
-Tilføjelser til "Arbejdsmønstre der virker":
-
-1. **Verifikation før destruktive operationer** — `pg_class`-query afslørede at de tre "fantom-tabeller" reelt ikke eksisterede, modsat hvad Supabase-klientens `head: true, count: "exact"` antydede. Lærepenge: brug en query der bryder hårdt på ikke-eksisterende tabeller, ikke en der returnerer `count = null` (falsk positiv)
-2. **Backup før overskrivning** — `tmp/types.stub.backup.ts` gjorde rollback trivielt da vi besluttede at udskyde regen til efter design
-3. **Token-rotation efter eksponering** — personal access token roteret straks efter at have været i chat-historik. Setx for persistent miljø-variabel i begge terminaler eliminerer paste-i-chat-fristelsen
-
-Tilføjelser til "Arbejdsmønstre der IKKE virker":
-
-1. ~~Acceptere Claude Codes sammenfattende rapporter som tilstrækkelige til kode-audit~~ — rapporter med konklusioner (✅/⚠️/🔴) UDEN faktisk cat-output udskrevet til chatten er Claude Codes vurdering, ikke uafhængig review. Kræv altid raw kode i chatten ved P1-audit-arbejde
-2. ~~Antage at `gen types --schema public` fanger alt~~ — det fanger BASE TABLES, ikke views. Hvis et fremtidigt projekt har views i public, skal vi eksplicit kræve dem
+Menneske-arbejde. Status-check af DPA'er, ZDR, juridisk indhold. Bør tackles før pilot.
 
 ---
 
-## Designvalg låst i Rute C (18. maj) — uændret
+## Designvalg låst i Rute C (18. maj) — opdateret med 20. maj-genåbninger
 
-Disse beslutninger er stadig kode og bør IKKE genåbnes uden eksplicit grund:
+Disse beslutninger er kode og bør IKKE genåbnes uden eksplicit grund:
 
 - RPC = single source of truth for autorisering på evaluate-flow (intet dobbelt-check via assertTenderOwner)
-- Tender-state-opdatering (evaluation_started_at, evaluation_completed_at, awarded_bid_id) skrives IKKE fra evaluate-route. UI udleder state fra bids
-- Winner → bulk "mark losers as not_awarded" gøres IKKE atomisk fra evaluate-route. UI håndterer per-bid
 - evaluation_notes-feltet er droppet, ikke genintroduceret. Notes-UI er lokal state uden persistens indtil bid_evaluations-tabel designes
 - Status-whitelist for evaluator: under_evaluation, accepted, rejected, winner, not_awarded (5 værdier). Submitted og under_review er afvist via PATCH
 - SQLSTATE-mapping: 42501 → 403, 22023 → 400
 - URL-konsistens (bid hører til tender) check'es IKKE i evaluate-route. RPC autoriserer baseret på bid_id alene
 - getUserRole returnerer 'owner' for profiles.role='buyer' (bagudkompatibilitet)
-- getSupplierId returnerer userId direkte (supplier_id = user.id i ny model)
 
-**Note 19. maj:** Schema-drift-fundet inkluderer `awarded_bid_id`-referencer i `tenders/[id]/bids/page.tsx`. Dette er i konflikt med "UI udleder state fra bids"-beslutningen ovenfor. Skal afklares i schema-design-fasen: enten refaktoreres UI-koden (foretrukket), eller designvalg genåbnes.
+**⚠️ Genåbnet 20. maj — IKKE længere gyldigt fra 18. maj:**
+
+- ~~Tender-state-opdatering (evaluation_started_at, evaluation_completed_at, awarded_bid_id) skrives IKKE fra evaluate-route. UI udleder state fra bids~~ — **ERSTATTET af #6**: `award_bid`-RPC opdaterer atomisk; `awarded_bid_id` er førsteklasses på `tender_lots`
+- ~~Winner → bulk "mark losers as not_awarded" gøres IKKE atomisk fra evaluate-route. UI håndterer per-bid~~ — **ERSTATTET af #6**: `award_bid`-RPC håndterer atomisk
+- ~~getSupplierId returnerer userId direkte (supplier_id = user.id i ny model)~~ — **ERSTATTET af #5**: returnerer supplier_organisation_id
+
+---
+
+## Arbejdsmønstre — opdateret 20. maj
+
+### Tilføjelser til "Arbejdsmønstre der virker"
+
+1. **Auto-mode på funktionel test ved version-mismatch** (18. maj) — `--sdk-version auto` prober kandidater og finder accepteret format
+2. **Targeted patch frem for full regen** (18. maj) når full regen kræver auth-setup vi ikke har tid til — pragmatisk midtervej der løser konkret typing-problem uden kaskade-risiko
+3. **Sikkerhedsventil i estimat-overskridelse** (18. maj) — eksplicit valg mellem "fortsæt", "pragmatisk hybrid" eller "accept teknisk gæld" når budget overskrides
+4. **Designsamtale-rytme med Rute C-protokol** (20. maj) — én reference ad gangen, eksplicit STOP mellem hver, ny evidens kræves for at genåbne tidligere beslutninger
+5. **Defensiv kode i build-toolchain** (20. maj) — sanity-check på første 30 tegn af CLI-output fangede `npx`-installations-prompt. Forsvar i lag virker selv på trivielle udseende scripts
+6. **Get-Content i PowerShell for kritisk file-review** (20. maj) — omgår Claude Code's tool-interface-begrænsning (se nedenfor)
+
+### Tilføjelser til "Arbejdsmønstre der IKKE virker"
+
+1. ~~Acceptere Claude Code's `{ ... }`-forkortelser ved kodeinspect~~ (18. maj) — kræver eksplicit `cat`-output, ikke `view`
+2. ~~Antage at smoke-test-script reelt verificerer ny kode-sti uden at læse scriptet først~~ (18. maj) — scriptet havde parallel auth-implementation
+3. **Antage at Claude Code's `cat`-eksekvering faktisk er bash-cat** (20. maj) — Claude Code's interface rebinder `cat scripts/X` til `Read`-tool og rapporterer "rå bash stdout ovenfor" som FALSK påstand. Workaround: brug `Get-Content` i PowerShell uden for Claude Code til kritisk file-verifikation. Også selv om man eksplicit prompter "Brug Bash-toolet, ikke Read-toolet"
+
+### Tilføjelse til "Editor-disciplin"
+
+- Markdown-redigering KUN i VS Code (ren UTF-8)
+- Cursor må IKKE bruges (auto-escape)
+- Notesblok må IKKE bruges (ANSI/CP1252 på ældre Windows)
+- Verificer encoding-indikator nederst i VS Code-statusbar før gem (UTF-8 uden BOM)
 
 ---
 
 ## Kommunikationspræferencer
 
 Uændret. Dansk, brutal ærlighed, eksplicit STOP-punkter, push og commit-beslutninger hos mennesket.
-
-**Tilføjelse 19. maj:** Ved kritisk kode-review kræves raw cat-output i chatten — Claude Codes "Read N lines"-bekræftelser eller `{...}`-forkortelser er IKKE tilstrækkelige.
