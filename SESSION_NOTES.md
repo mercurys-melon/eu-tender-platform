@@ -2,8 +2,8 @@
 
 Denne fil bevares som kontinuitet mellem AI-assisterede arbejdssessioner. Læs den ved start af hver ny session sammen med CLAUDE.md.
 
-**Sidst opdateret:** 20. maj 2026
-**Sidst aktive session:** 20. maj 2026 (Schema-design fase 1 — 6 design-beslutninger + scripts/gen-types.mjs)
+**Sidst opdateret:** 22. maj 2026
+**Sidst aktive session:** 22. maj 2026 (kort session — ERST DKUDBUD-arkitektur bekræftet + Reference #9 scoped)
 
 ---
 
@@ -23,6 +23,22 @@ Denne fil bevares som kontinuitet mellem AI-assisterede arbejdssessioner. Læs d
 - Verificeret 20. maj: dry-run producerede 17484 bytes / 592 linjer, første 3 bytes 101 120 112 (= "exp"), ingen BOM
 - Sanity-check fangede `npx`-installations-prompt på første kørsel (regex afviste "Need to install the following") — defensiv kode bestod første test
 - Pushed til origin/main
+
+### ✅ 22. maj — ERST DKUDBUD-arkitektur bekræftet
+
+ERST-mail modtaget 22. maj 2026 fra `system@udbud.dk` på rykker fra 20. maj:
+
+> 1. Findes der et søge-API vi har overset?
+> Det korte svar er, nej, der er ikke noget søge-API i har overset.
+> 2. Hvis ikke — er den anbefalede arkitektur at vi periodisk syncer fraKilde/DKUDBUD og indekserer lokalt til søgning?
+> ja, det er lige præcist det vi anbefaler.
+
+**Direkte implikationer:**
+- `src/lib/search/providers/udbuddk.ts` mock-data skal erstattes med lokal indeks-query
+- Lokal sync-tabel(ler) skal designes (Reference #9, scoped men ikke designet)
+- Forward-compatible: webhook-baseret push fra ERST kan tilføjes senere hvis tilbudt
+
+**Sessions-omfang 22. maj:** Reference #9 tilføjet til arbejdsliste, 6 underspørgsmål + 2 afventer-spørgsmål formuleret. Ingen designvalg truffet — bookes til næste session 25. maj.
 
 ### 🔴 src/lib/supabase/types.ts er STADIG den håndskrevne stub
 
@@ -146,6 +162,52 @@ Designes næste session (efter #5-fundament er på plads).
 
 ---
 
+## Reference #9-scoping (22. maj) — afventer designsamtale 25. maj
+
+Sektion dokumenterer scope og underspørgsmål; INGEN beslutninger truffet 22. maj.
+
+### Underspørgsmål til designsamtale 25. maj
+
+1. **Scope-afgrænsning:** Hvad indeholder lokal sync — kun DKUDBUD, eller også TED og eget-publicerede?
+   - Foreløbig analyse: DKUDBUD + eget-publicerede; TED separat (ikke eSender endnu)
+   - Begrundelse: tilbudsgiver-søgning skal vise ALLE relevante tenders
+
+2. **Sync-strategi:** Pull-baseret cron, push via webhook, eller hybrid?
+   - Foreløbig analyse: pull-baseret cron via Vercel Cron eller Supabase scheduled functions
+   - Webhook eksisterer formentlig ikke (verificeres via opfølgende ERST-mail)
+
+3. **Sync-frekvens og delta-håndtering:** Full refresh vs. inkrementel; hvor ofte; hvordan håndteres rettelser/annulleringer?
+   - Foreløbig analyse: inkrementel pull hver 15-30 min via `fraKilde/DKUDBUD?from={lastSyncTimestamp}` hvis from-parameter understøttes
+   - Initial full sync første kørsel
+   - Verifikation: tjek `openapi-udbud.yml` for from-parameter-støtte
+
+4. **Retention:** Hvor længe gemmer vi sync'ede notices lokalt?
+   - Foreløbig analyse: ubegrænset for "live" tenders + 5 år for lukkede (matcher arkivlov-rytme)
+   - Tunes efter datavolumen-erfaring
+
+5. **Indekserings-strategi:** Strukturerede kolonner alene, PostgreSQL tsvector, eller ekstern søgemaskine?
+   - Foreløbig analyse: PostgreSQL tsvector + GIN-indeks i v1
+   - Begrundelse: Supabase native, ingen ekstra infra
+   - Forward-compatible: skifte til Meilisearch hvis latency/volumen kræver det
+
+6. **Relation til eget-publicerede tenders:** Forenet eller separat indeks?
+   - Foreløbig analyse: én forenet tabel `notices` med `source`-enum (`dkudbud_sync` | `own_published`)
+   - Eget-publicerede tenders skriver ind via trigger eller eksplicit funktion ved publicering
+   - Implikation: `publication_events` (Reference #2) trigger'er muligvis indeks-write
+
+### Afventer ERST-opfølgning (kan ikke besvares 25. maj uden mere info)
+
+- **CPV-traversering:** Returnerer ERST flade eller hierarkiske CPV-felter? Søger vi på CPV-kode alene eller hele underhierarkiet?
+- **Notice-status livscyklus:** Hvordan håndterer ERST "ændret", "annulleret", "korrigeret" notices? Diff-format eller ny version?
+
+Rykker-mail til ERST udsendes næste session efter designsamtalen, baseret på hvad #9-beslutningerne afhænger af.
+
+### Estimat
+
+Fuld designsamtale 45-60 min næste session (25. maj), før SCHEMA-DESIGN.md hovedopgaven påbegyndes. Hvis #9 trækker over 60 min, splittes — kerne-spørgsmål #1, #2, #5, #6 prioriteres da disse blokerer SCHEMA-DESIGN.md-strukturen.
+
+---
+
 ## Det vigtigste at vide før næste session
 
 ### 🔴 Hovedopgave næste session: Skriv `docs/SCHEMA-DESIGN.md`
@@ -173,19 +235,21 @@ Smoke-test 18. maj brugte scriptets egen parallelle auth-implementation, ikke `u
 
 `UdbudDKPayload` returnerer fladt JSON, ERST forventer eForms UBL XML. service.ts har TODO. Payload-builder-rewrite (estimat 3-4 timer) udestår. Bør tackles før første reelle PROD-publicering.
 
-### 🟠 ERST-mail om søge-API afventer
+### ✅ ERST-mail om søge-API besvaret (22. maj)
 
-`system@udbud.dk` — rykket 20. maj. Intet svar pr. 20. maj.
+ERST bekræftede 22. maj 2026: intet søge-API, anbefalet arkitektur er periodisk sync via `fraKilde/DKUDBUD` med lokal indeksering. Se Reference #9-scoping sektion ovenfor for opfølgning.
 
-### 🟠 Pilot 8. juni-realisme
+Opfølgende ERST-mail planlagt efter #9-designsamtale 25. maj — vedrører CPV-traversering og notice-status livscyklus.
 
-Pilot er presset men ikke automatisk umuligt. Implementeringsfasen kan tidligst begynde efter SCHEMA-DESIGN.md er låst og første migrationer kørt. Realistisk arbejdsplan:
-- 21-23. maj: SCHEMA-DESIGN.md + reference #8-design
-- 24-31. maj: Migrationer + tests
+### 🟠 Pilot 8. juni-realisme — tidsplan strammere efter 22. maj
+
+22. maj brugt på ERST-svar og Reference #9-scoping (ikke SCHEMA-DESIGN.md). Revideret arbejdsplan:
+- 25. maj: Reference #9 designsamtale (45-60 min) + SCHEMA-DESIGN.md med #1-#8 (2-3 timer)
+- 26-31. maj: Migrationer + tests + #9 sync-implementering hvis tid
 - 1-7. juni: Faktisk types.ts-regenerering + kaskade-fix + UI-arbejde
 - 8. juni: Pilot-møde
 
-Hvis nogen af disse blokke glider, skubbes pilot. Aktiv overvågning af scope og energi-niveau er obligatorisk.
+Hvis 25. maj-blokken glider over én session, skubbes hele kæden. #9-implementering er sekundær for pilot — kan udsættes hvis det presser SCHEMA-DESIGN.md eller migrationer.
 
 ### 🟠 Innobooster periode 3: åbner 27. maj, lukker 6. august 2026
 
@@ -199,13 +263,13 @@ DPA'er, ZDR-aktivering, privatlivspolitik, vilkår, tilgængelighedserklæring �
 
 ## Næste session — prioriteret to-do
 
-### Prioritet 1: Skriv `docs/SCHEMA-DESIGN.md`
+### Prioritet 1: Reference #9-designsamtale (DKUDBUD lokal sync)
 
-Med dagens 6 beslutninger + skitse for #8. Estimat: 2-3 timer. Skal være kompletteret før migrationer påbegyndes.
+Bygger på ERST-bekræftelse fra 22. maj. 6 underspørgsmål + 2 afventer-punkter formuleret i sektion "Reference #9-scoping (22. maj)". Estimat: 45-60 min. Skal gennemføres FØR SCHEMA-DESIGN.md skrives — #9-tabel-design påvirker cross-cutting sektion.
 
-### Prioritet 2: Reference #8-designsamtale (fasekonkluderende meddelelser)
+### Prioritet 2: Skriv `docs/SCHEMA-DESIGN.md`
 
-Tildelingsbreve, prækvalifikationsbeslutninger, annullering, standstill-afslutning. Estimat: 45-60 min når #5-virksomhedsmodel er låst som grundlag. Indlejres i SCHEMA-DESIGN.md.
+Med 20. maj-beslutninger (#1-#6) + #8-design + #9-beslutninger fra P1. Reference #8 (fasekonkluderende meddelelser) indlejres som del af dokumentet — separat designsamtale 45-60 min efter #5-fundament er på plads. Samlet estimat: 2-3 timer.
 
 ### Prioritet 3: P1-client audit-opfølgning
 
