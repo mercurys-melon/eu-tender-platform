@@ -2,6 +2,8 @@
 
 Denne fil er permanent kontekst for Claude Code. Læs den i sin helhed ved start af hver session.
 
+**Læs også:** `docs/SCHEMA-DESIGN.md` ved opstart af session der berører database-schema, migrations, supplier-model, notifikationer eller søgning. SCHEMA-DESIGN.md er kanonisk for design-beslutninger låst 20.-26. maj 2026.
+
 ---
 
 ## Projektoverblik
@@ -146,17 +148,77 @@ Inden ERST PROD-go-live SKAL vi:
 - audit_logs mangler dedikeret 'actor_type'-kolonne — midlertidigt håndteret via metadata.actor_type i triggers fra migration 20260417120002.
 - tenders.organisation_id mangler FK-constraint til organisations.id — bevidst valg pga. legacy entity_id med fritekst-data.
 
-### Identificeret 13. maj 2026 (P1-sessionen)
+### Identificeret 13. maj 2026 (P1-sessionen) — statusopdatering 27. maj 2026
 
-- **Payload-format mismatch:** `UdbudDKPayload` i `payload-builder.ts` producerer fladt JSON, men ERST forventer eForms UBL XML (per `openapi-udbud.yml` og `scripts/output/notice-payload.xml`). `service.ts` har TODO-kommentar. Skal fixes før første reelle PROD-publicering — uden korrekt format vil valider-endpoint returnere fejl.
+- **Payload-format mismatch:** `UdbudDKPayload` i `payload-builder.ts` producerer fladt JSON, men ERST forventer eForms UBL XML (per `openapi-udbud.yml` og `scripts/output/notice-payload.xml`). `service.ts` har TODO-kommentar. Skal fixes før første reelle PROD-publicering — uden korrekt format vil valider-endpoint returnere fejl. **Status 27. maj:** uændret. Estimeret arbejde 3-4 timer.
 
-- **Søge-API mangler i ERST-spec:** `src/lib/search/providers/udbuddk.ts` returnerer mock-data fordi ERST's API ikke har et søge-endpoint. Afklaring afventer `system@udbud.dk`. Alternativ arkitektur: periodisk sync via `fraKilde/{DKUDBUD}` + lokal indeksering i Supabase.
+- **Søge-API mangler i ERST-spec:** ✅ **Afklaret 21. maj 2026:** ERST bekræftede at API'et IKKE har søge-endpoint. Løsning er besluttet og dokumenteret i SCHEMA-DESIGN.md reference #9: periodisk sync via `fraKilde/{DKUDBUD}` til lokalt `notices`-indeks med tsvector + GIN. Mock-providere i `src/lib/search/providers/udbuddk.ts` erstattes som del af migration #9.
 
-- **getSession() advarsel fra Supabase:** Auth-koden bruger flere steder `getSession()` der ifølge Supabase's egne docs er usikker (læser cookies uden auth-server-verifikation). Best practice er `getUser()`. Skal adresseres som del af security-audit før produktion.
+- **getSession() advarsel fra Supabase:** Auth-koden bruger flere steder `getSession()` der ifølge Supabase's egne docs er usikker (læser cookies uden auth-server-verifikation). Best practice er `getUser()`. Skal adresseres som del af security-audit før produktion. **Status 27. maj:** uændret.
 
-- **privatlivspolitik og vilkaar er stubs:** `src/app/privatlivspolitik/page.tsx` og `src/app/vilkaar/page.tsx` er placeholder-ruter uden reelt juridisk indhold. Skal udfyldes før pilotkunde åbnes.
+- **privatlivspolitik og vilkaar er stubs:** `src/app/privatlivspolitik/page.tsx` og `src/app/vilkaar/page.tsx` er placeholder-ruter uden reelt juridisk indhold. Skal udfyldes før pilotkunde åbnes. **Status 27. maj:** uændret; del af compliance-blokken før 8. juni-pilot.
 
-- **Token-cache er global mutable state:** `udbud-dk-client.ts` cacher tokens in-memory per Node-proces. Ved horizontal scaling (flere Vercel-instanser) vil hver instans have sin egen cache og fetche selvstændige tokens. Overvej Redis/Vercel KV når skaleringsmønsteret er afklaret.
+- **Token-cache er global mutable state:** `udbud-dk-client.ts` cacher tokens in-memory per Node-proces. Ved horizontal scaling (flere Vercel-instanser) vil hver instans have sin egen cache og fetche selvstændige tokens. Overvej Redis/Vercel KV når skaleringsmønsteret er afklaret. **Status 27. maj:** uændret; ikke kritisk for pilot.
+
+- **`publication_jobs`-stub i `types.ts`** (legacy fra Cursor): hand-written tabel-stub uden faktisk DB-tabel. **Status:** afklaret som forskellig fra ny `publication_events` (SCHEMA-DESIGN.md #2). Stub'en fjernes ved næste types.ts-regenerering.
+
+- **`leads`-tabellen:** ubrugt teknisk gæld fra Cursor-perioden. **Status:** besluttet slettet permanent jf. SCHEMA-DESIGN.md #1. Migration `drop_leads` planlagt som første migration i 28.-31. maj-blokken.
+
+- **`bids.supplier_id` refererer `auth.users(id)` direkte:** mangler virksomheds-niveau i tilbudsgiver-modellen. **Status:** løsning besluttet jf. SCHEMA-DESIGN.md #5 — refactor til `supplier_organisation_id` med backfill. PITR restore-test prerequisite før PROD-deploy.
+
+---
+
+## Schema-design v1.0 (låst 26. maj 2026)
+
+Den fulde schema-designspecifikation findes i `docs/SCHEMA-DESIGN.md`. Denne sektion er et overblik for sessioner der ikke kræver fuld detalje.
+
+### De 14 beslutninger låst 20.-26. maj 2026
+
+| # | Reference | Kerneindhold | Status |
+|---|-----------|--------------|--------|
+| 1 | leads-rydning | Slet `leads` permanent | Migration klar til skrivning |
+| 2 | publication audit | Ny `publication_events` + status-felter på `tenders` | Migration klar |
+| 3 | evaluation documents | Ny `evaluation_documents` + `document_type`-enum | Migration klar |
+| 4 | tender phases | Ny `tender_phases` + `phase_type`-enum + state-machine | Migration klar |
+| 5 | supplier-model | Ny `supplier_organisations`, `supplier_organisation_users`, `tender_participants` + bids-refactor | Kritisk sti; PITR-test prerequisite |
+| 6 | tildelings-flow | `tender_lots.awarded_bid_id` + `award_bid`/`cancel_award` RPCs | Afhænger af #5 |
+| 8 | notifications | Komplet underretningsmodel (§ 170 award, § 171 standstill, annullering) — 5 tabeller, 1 RPC, 4 enums | Afhænger af #4, #5 |
+| 9 | DKUDBUD lokal sync | Ny `notices` + `sync_state`, tsvector + GIN, cron 30 min | Selvstændig domæne; Vercel Pro prerequisite |
+
+Reference #7 eksisterer ikke (nummerering hoppede over efter beslutning om at konsolidere et tidligere punkt).
+
+### Migrations-rækkefølge
+
+Bindende rækkefølge (jf. SCHEMA-DESIGN.md §1.4):
+
+```
+#1 → #2 (parallelt med #3, #4)
+#5 base → #5 participants → #5 bids-refactor
+#5 bids-refactor → #6 (kræver ny supplier_organisation_id)
+#4 (parallelt) → #6 (kræver phase-overgang)
+#9 (selvstændig)
+#10/#8 (kræver #5 + #4 + #6 være på plads)
+```
+
+### Prerequisites før migrations-fasen
+
+- Vercel Pro-upgrade ($20/mdr) før #9 cron aktiveres (deadline 8. juni 2026)
+- PITR restore-test verificeret før #5 bids-refactor deployes mod PROD
+- Zod-schema-filer skrevet i samme commit som JSONB-introducerende migrations
+- Alle ERST-mail-afklaringer (sendt 26. maj) bør være modtaget før PROD-aktivering af #9
+
+### Konventioner låst i SCHEMA-DESIGN.md §1.2
+
+Navngivning, datatyper, FK-håndtering, RLS-strategi, JSONB-validering og audit-felter er kanonisk beskrevet i SCHEMA-DESIGN.md §1.2. **Konsistens er vigtigere end mikro-optimering** — afvigelser skal dokumenteres i migration-kommentaren.
+
+### Genåbnede beslutninger fra Rute C 18. maj
+
+To Rute C-beslutninger er **erstattet** af nyere designvalg og er ikke længere gyldige:
+
+- ~~`supplier_id = user.id` i bids~~ → erstattet af #5 (fuld virksomheds-model)
+- ~~UI-baseret winner-håndtering uden RPC~~ → erstattet af #6 (atomic `award_bid`-RPC)
+
+Resterende Rute C-beslutninger (RPC som single source of truth, SQLSTATE-mapping 42501→403/22023→400, status-whitelist, etc.) er stadig gyldige.
 
 ---
 
@@ -296,24 +358,61 @@ Afgiv altid svaret som vejledning, aldrig som bindende juridisk rådgivning.
 - **EU-region** påkrævet (`SUPABASE_REGION`)
 
 ### Centrale tabeller (højniveau)
+
+Listen nedenfor afspejler både eksisterende tabeller og dem der introduceres ved migrations-blokken 28.-31. maj 2026 (markeret med 🆕). Se `docs/SCHEMA-DESIGN.md` for fuld detalje.
+
 ```
-organisations          -- ordregivere (boligselskaber, kommuner etc.)
-organisation_types     -- klassifikation (kommune, alment boligselskab, offentligretligt organ)
-users                  -- brugere tilknyttet organisationer
-user_roles             -- rollebaseret adgang (RBAC)
-tenders                -- udbud (hoved-entitet)
-tender_documents       -- udbudsmateriale og tilknyttede dokumenter
-tender_lots            -- delaftaler
-tender_cpv             -- CPV-koder pr. udbud / delaftale
-submissions            -- tilbud/ansøgninger fra tilbudsgivere
-communications         -- spørgsmål/svar, meddelelser
-espd_requests          -- genererede ESPD-anmodninger
-espd_responses         -- modtagne ESPD-besvarelser
-publication_log        -- log over publicering til Udbud.dk / TED
-ai_evaluation_log      -- audit-log for AI-evalueringer (INGEN indhold)
-journal_exports        -- eksportpakker til journalisering/arkivering
-audit_log              -- generelt audit trail for alle critical actions
+-- Organisations- og bruger-domæne
+organisations                     -- ordregivere (boligselskaber, kommuner etc.)
+organisation_types                -- klassifikation (kommune, alment boligselskab, offentligretligt organ)
+users                             -- brugere tilknyttet organisationer
+user_roles                        -- rollebaseret adgang (RBAC)
+
+-- Tilbudsgiver-virksomheds-model (#5)
+supplier_organisations         🆕 -- tilbudsgiver-virksomheder (CVR-baseret)
+supplier_organisation_users    🆕 -- M:N user ↔ supplier_organisation
+tender_participants            🆕 -- aktive tilbudsgivere pr. udbud
+
+-- Udbuds-domæne
+tenders                           -- udbud (hoved-entitet) — +publication_status, last_published_at, current_notice_id (#2)
+tender_documents                  -- udbudsmateriale og tilknyttede dokumenter (eksternt synligt)
+tender_lots                       -- delaftaler — +awarded_bid_id, awarded_at, awarded_by (#6)
+tender_cpv                        -- CPV-koder pr. udbud / delaftale
+tender_phases                  🆕 -- livscyklus-faser (preparation → published → ... → standstill → awarded → archived)
+bids                              -- tilbud — supplier_id refactored til supplier_organisation_id (#5)
+communications                    -- spørgsmål/svar, meddelelser
+
+-- Evaluation (intern, IKKE delt med tilbudsgivere)
+evaluation_documents           🆕 -- interne bilag knyttet til evaluation (frivillige)
+
+-- ESPD og publicering
+espd_requests                     -- genererede ESPD-anmodninger
+espd_responses                    -- modtagne ESPD-besvarelser
+publication_events             🆕 -- audit-log for ERST-API-kald (erstatter konceptet `publication_log`)
+
+-- Notifikationer (#8 — komplet underretningsmodel)
+procurement_notifications      🆕 -- underretninger (typed JSONB, state-machine)
+notification_recipients        🆕 -- hvem skal modtage hver notifikation
+notification_deliveries        🆕 -- faktisk leverance pr. kanal (inbox/email)
+notification_templates         🆕 -- system + custom org-skabeloner
+notification_attachments       🆕 -- shared/individual bilag
+
+-- Søgning og sync (#9 — DKUDBUD lokal sync)
+notices                        🆕 -- denormaliseret søge-indeks (DKUDBUD + eget-publicerede)
+sync_state                     🆕 -- sync-status pr. ekstern kilde
+
+-- Audit og arkivering
+ai_evaluation_log                 -- audit-log for AI-evalueringer (INGEN indhold)
+journal_exports                   -- eksportpakker til journalisering/arkivering
+audit_log                         -- generelt audit trail for alle critical actions
+
+-- Slettes permanent (#1)
+leads                          ❌ -- slettes i migration `drop_leads`
 ```
+
+**Nye enums** (jf. SCHEMA-DESIGN.md §1.6): `phase_type`, `document_type`, `publication_status`, `notice_status`, `notification_type`, `notification_state`, `delivery_channel`, `delivery_status`.
+
+**Nye RPCs:** `award_bid`, `cancel_award`, `send_procurement_notification`.
 
 ### Observability
 - **Structured logging** via `pino`
@@ -389,6 +488,6 @@ Når en ny Claude Code session startes, verificeres følgende:
 
 ---
 
-*Sidst opdateret: 13. maj 2026*
+*Sidst opdateret: 27. maj 2026*
 *Projekt: eu-tender-platform*
-*Version: 2.1*
+*Version: 2.2 (additiv delta-opdatering: tilføjet reference til SCHEMA-DESIGN.md v1.0, ny sektion "Schema-design v1.0", opdateret tabel-oversigt, opdaterede teknisk gæld-noter med 27. maj-status)*
