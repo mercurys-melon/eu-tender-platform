@@ -25,12 +25,6 @@ export const getProfile = cache(async (): Promise<Profile | null> => {
   return data
 })
 
-export const getSession = cache(async () => {
-  const supabase = getServerClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  return session
-})
-
 // Redirects to /login if not authenticated – use in Server Components
 export async function requireUser(): Promise<User> {
   const user = await getUser()

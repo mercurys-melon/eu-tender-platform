@@ -27,34 +27,20 @@ export function SiteFooter() {
                   Udbud
                 </a>
               </li>
-              <li>
-                <a href="/documents" className="text-silver-mist hover:text-white transition-colors">
-                  Dokumenter
-                </a>
-              </li>
-              <li>
-                <a href="/qa" className="text-silver-mist hover:text-white transition-colors">
-                  Spørgsmål &amp; Svar
-                </a>
-              </li>
             </ul>
           </div>
           <div>
             <h4 className="text-h4 mb-4">Support</h4>
             <ul className="space-y-2">
               <li>
-                <a href="/contact" className="text-silver-mist hover:text-white transition-colors">
+                {/* TODO(Frank): bekræft at postkassen findes før launch */}
+                <a href="mailto:kontakt@mercurrytender.dk" className="text-silver-mist hover:text-white transition-colors">
                   Kontakt
                 </a>
               </li>
               <li>
-                <a href="/about" className="text-silver-mist hover:text-white transition-colors">
-                  Om Mercurry Tender
-                </a>
-              </li>
-              <li>
-                <a href="/help" className="text-silver-mist hover:text-white transition-colors">
-                  Hjælp
+                <a href="/faq" className="text-silver-mist hover:text-white transition-colors">
+                  FAQ
                 </a>
               </li>
             </ul>

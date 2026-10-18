@@ -3,22 +3,24 @@ import { redirect } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Topbar } from '@/components/layout/topbar'
 import { getUser, getProfile } from '@/lib/auth'
+import { isRole } from '@/lib/roles'
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const [user, profile] = await Promise.all([getUser(), getProfile()])
 
   if (!user || !profile) redirect('/login')
+  const activeRole = isRole(profile.active_role) ? profile.active_role : 'buyer'
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <Sidebar
-        activeRole={profile.active_role}
+        activeRole={activeRole}
         fullName={profile.full_name}
         email={user.email}
       />
       <div className="flex min-h-screen flex-col lg:pl-64">
         <Topbar
-          activeRole={profile.active_role}
+          activeRole={activeRole}
           fullName={profile.full_name}
           email={user.email}
         />

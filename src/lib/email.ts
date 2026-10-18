@@ -83,7 +83,7 @@ export async function sendQuestionReceivedNotification(
 ): Promise<void> {
   const tenderUrl = tenderId
     ? `${env.app.baseUrl}/tenders/${tenderId}/manage`
-    : `${env.app.baseUrl}/buyer`
+    : `${env.app.baseUrl}/ordregiver`
 
   const { html, text } = questionReceivedTemplate(tenderTitle, tenderUrl)
   await sendEmail({
@@ -139,7 +139,7 @@ export async function sendApplicationReceivedNotification(
 ): Promise<void> {
   const tenderUrl = tenderId
     ? `${env.app.baseUrl}/tenders/${tenderId}/bids`
-    : `${env.app.baseUrl}/buyer`
+    : `${env.app.baseUrl}/ordregiver`
 
   const { html, text } = applicationReceivedTemplate(tenderTitle, tenderUrl, applicantName)
   await sendEmail({

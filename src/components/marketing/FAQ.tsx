@@ -1,8 +1,8 @@
 export function FAQ() {
   const faqs = [
     {
-      question: 'Hvordan fungerer BlockBid?',
-      answer: 'BlockBid er en platform der gør det nemt at finde, analysere og byde på offentlige udbud.'
+      question: 'Hvordan fungerer Mercurry Tender?',
+      answer: 'Mercurry Tender er en platform der gør det nemt at finde, analysere og byde på offentlige udbud.'
     },
     {
       question: 'Er det gratis at bruge?',

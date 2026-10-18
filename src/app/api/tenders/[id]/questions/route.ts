@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { getCurrentUser, assertTenderOwner } from '@/lib/authz'
+import { createClient, getServiceClient } from '@/lib/supabase/server'
+import { getCurrentUser, assertTenderOwner, isTenderPublic } from '@/lib/authz'
 import { z } from 'zod'
 import { json, badRequest, unauthorized, internal } from '@/lib/http'
 import type { Database } from '@/lib/supabase/types'
@@ -33,8 +33,23 @@ export async function POST(
     const body = await request.json()
     const validatedData = questionSchema.parse(body)
 
+    // Spørgsmål kan kun stilles til et publiceret udbud
+    const { data: tender } = await supabase
+      .from('tenders')
+      .select('id, status')
+      .eq('id', params.id)
+      .maybeSingle()
+    if (!tender || !isTenderPublic(tender)) {
+      return json({ error: 'Udbuddet findes ikke' }, 404)
+    }
+
+    // Service-role herfra: (a) asked_by/kontaktfelter er kolonne-låst, og
+    // (b) INSERT ... RETURNING ville ellers fejle på SELECT-RLS (upubliceret række).
+    // Brugeren er autentificeret og udbuddet verificeret ovenfor.
+    const db = getServiceClient()
+
     // Rate limiting check (simple implementation)
-    const { count } = await supabase
+    const { count } = await db
       .from('tender_questions')
       .select('id', { count: 'exact', head: true })
       .eq('tender_id', params.id)
@@ -62,7 +77,7 @@ export async function POST(
       .replace(/<[^>]*>/g, '')
       .trim()
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('tender_questions')
       .insert({
         tender_id: params.id,
@@ -108,61 +123,61 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = createClient()
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') || 'published'
 
-    // Non-public view requires authentication + tender ownership
-    if (status !== 'published') {
-      const user = await getCurrentUser()
-      if (!user) return unauthorized()
-
-      const isOwner = await assertTenderOwner(user.id, params.id)
-      if (!isOwner) return json({ error: 'Kun tender-ejeren kan se upublicerede spørgsmål' }, 403)
-    }
-
-    let query = supabase
-      .from('tender_questions')
-      .select(`
-        id,
-        question_text,
-        question_text_public,
-        answer_text,
-        is_published,
-        is_anonymized,
-        contact_email,
-        contact_name,
-        created_at,
-        updated_at
-      `)
-      .eq('tender_id', params.id)
-
+    // ── Offentlig visning: kun publicerede spørgsmål, kun offentlige kolonner ──
+    // Spørgerens identitet og originaltekst udleveres ALDRIG offentligt
+    // (hvem der har vist interesse for et udbud er fortroligt).
     if (status === 'published') {
-      query = query.eq('is_published', true)
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('tender_questions')
+        .select('id, question_text_public, answer_text, is_published, created_at, updated_at')
+        .eq('tender_id', params.id)
+        .eq('is_published', true)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Error fetching published questions:', error.message)
+        return internal('Kunne ikke hente spørgsmål')
+      }
+
+      return json({
+        items: (data ?? []).map((q) => ({
+          id: q.id,
+          question_text: q.question_text_public,
+          answer_text: q.answer_text,
+          is_published: q.is_published,
+          created_at: q.created_at,
+          updated_at: q.updated_at,
+        })),
+      })
     }
 
-    const { data, error } = await query
+    // ── Ejer-visning: kræver login + ejerskab ──
+    const user = await getCurrentUser()
+    if (!user) return unauthorized()
+
+    const isOwner = await assertTenderOwner(user.id, params.id)
+    if (!isOwner) return json({ error: 'Kun tender-ejeren kan se upublicerede spørgsmål' }, 403)
+
+    // Kontaktfelter og originaltekst er kolonne-låst for anon/authenticated
+    // (migration 20261018120000). Læses derfor med service-role EFTER ejerskabstjek.
+    const { data, error } = await getServiceClient()
+      .from('tender_questions')
+      .select(
+        'id, question_text, question_text_public, answer_text, is_published, is_anonymized, contact_email, contact_name, created_at, updated_at',
+      )
+      .eq('tender_id', params.id)
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching questions:', error)
+      console.error('Error fetching questions:', error.message)
       return internal('Kunne ikke hente spørgsmål')
     }
 
-    return json({
-      items: data.map(q => ({
-        id: q.id,
-        question_text: status === 'published' ? q.question_text_public : q.question_text,
-        question_text_public: q.question_text_public,
-        answer_text: q.answer_text,
-        is_published: q.is_published,
-        is_anonymized: q.is_anonymized,
-        contact_email: q.contact_email,
-        contact_name: q.contact_name,
-        created_at: q.created_at,
-        updated_at: q.updated_at,
-      }))
-    })
+    return json({ items: data ?? [] })
   } catch (error) {
     console.error('Error in GET /questions:', error)
     return internal('Intern server fejl')

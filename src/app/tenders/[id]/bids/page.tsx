@@ -1,138 +1,85 @@
 export const dynamic = 'force-dynamic'
 
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { getCurrentUser, getManagedTender } from '@/lib/authz'
 import { BlockBidCard } from '@/components/ui/blockbid-card'
 import { BidsEvaluationTable } from '@/components/tenders/BidsEvaluationTable'
-import { EvaluationDocumentsUpload } from '@/components/tenders/EvaluationDocumentsUpload'
 import type { Database } from '@/lib/supabase/types'
 
-// Type for the joined data structure that Supabase returns
-type BidWithSupplier = Database['public']['Tables']['bids']['Row'] & {
-  suppliers: {
-    company_name: string
-  } | null
-}
+type BidRow = Database['public']['Tables']['bids']['Row']
 
-async function getTender(id: string) {
+/**
+ * Tilbudsoversigt for ordregiver.
+ *
+ * Adgang: kun brugere der administrerer udbuddet (tjekkes eksplicit her).
+ * Fortrolighed: bids-RLS ("bids_buyer_select_after_deadline") udleverer først
+ * tilbud efter fristen. Før fristen vises kun antal via metadata-RPC'en.
+ */
+export default async function BidsPage({ params }: { params: { id: string } }) {
+  const user = await getCurrentUser()
+  if (!user) redirect(`/login?redirectTo=/tenders/${params.id}/bids`)
+
+  const tender = await getManagedTender(user.id, params.id)
+  if (!tender) notFound()
+
+  const deadlinePassed = new Date(tender.submission_deadline).getTime() <= Date.now()
   const supabase = createClient()
-  const { data, error } = await supabase
-    .from('tenders')
-    .select('id, title, status, awarded_bid_id, evaluation_documents')
-    .eq('id', id)
-    .single()
 
-  if (error || !data) {
-    return null
-  }
+  let bids: BidRow[] = []
+  let submittedCount = 0
 
-  return data
-}
-
-async function getBids(tenderId: string): Promise<BidWithSupplier[]> {
-  const supabase = createClient()
-  
-  // Fetch bids with supplier company_name join
-  // Note: RLS might restrict supplier access, so we handle null gracefully
-  // Try with join first - if it fails due to RLS, fall back to basic query
-  const { data, error } = await supabase
-    .from('bids')
-    .select(`
-      *,
-      suppliers (
-        company_name
-      )
-    `)
-    .eq('tender_id', tenderId)
-    .order('amount', { ascending: true })
-
-  if (error) {
-    console.error('Error fetching bids with join:', error)
-    // If join fails (e.g., due to RLS), try without join
-    const { data: bidsData, error: bidsError } = await supabase
+  if (deadlinePassed) {
+    const { data, error } = await supabase
       .from('bids')
       .select('*')
-      .eq('tender_id', tenderId)
+      .eq('tender_id', params.id)
       .order('amount', { ascending: true })
-    
-    if (bidsError) {
-      console.error('Error fetching bids:', bidsError)
-      return []
-    }
-    
-    return (bidsData as BidWithSupplier[]) || []
+    if (error) console.error('[bids page] kunne ikke hente bud:', error.message)
+    bids = data ?? []
+  } else {
+    const { data, error } = await supabase.rpc('get_bid_metadata_for_tender', {
+      p_tender_id: params.id,
+    })
+    if (error) console.error('[bids page] metadata-RPC fejlede:', error.message)
+    submittedCount = (data ?? []).length
   }
 
-  return (data as unknown as BidWithSupplier[]) || []
-}
-
-export default async function BidsPage({ params }: { params: { id: string } }) {
-  const tender = await getTender(params.id)
-
-  if (!tender) {
-    notFound()
-  }
-
-  const bids = await getBids(params.id)
-
-  // Sort bids by amount (ascending) - already sorted in query, but ensure it
-  const sortedBids = [...bids].sort((a, b) => (a.amount ?? 0) - (b.amount ?? 0))
-
-  // Fetch evaluation documents
-  let evaluationDocuments: Array<{ path: string; fileName: string; url: string | null }> = []
-  try {
-    const serviceClient = createServiceClient()
-    const evaluationDocs = tender.evaluation_documents || []
-    evaluationDocuments = await Promise.all(
-      evaluationDocs.map(async (path: string) => {
-        const { data } = await serviceClient.storage
-          .from('evaluation-documents')
-          .createSignedUrl(path, 3600)
-        const fileName = path.split('/').pop() || path
-        return {
-          path,
-          fileName,
-          url: data?.signedUrl || null,
-        }
-      })
-    )
-  } catch (error) {
-    console.error('Error fetching evaluation documents:', error)
-  }
+  const deadlineText = new Date(tender.submission_deadline).toLocaleString('da-DK', {
+    timeZone: 'Europe/Copenhagen',
+    dateStyle: 'long',
+    timeStyle: 'short',
+  })
 
   return (
     <div className="space-y-6">
       <BlockBidCard>
         <div className="mb-6">
-          <h2 className="text-h2 text-digital-navy mb-2" style={{ fontFamily: 'var(--font-space-grotesk), system-ui, sans-serif' }}>
-            Tilbud på udbud
-          </h2>
-          <p className="text-granite-grey" style={{ fontFamily: 'var(--font-inter), system-ui, sans-serif' }}>
-            Oversigt over alle modtagne tilbud
+          <h2 className="text-h2 text-digital-navy mb-2">Tilbud på udbud</h2>
+          <p className="text-granite-grey">
+            {deadlinePassed
+              ? `Tilbudsfristen udløb ${deadlineText}. Tilbuddene er åbnet.`
+              : `Tilbuddene er forseglede indtil fristen ${deadlineText}.`}
           </p>
         </div>
 
-        {sortedBids.length === 0 ? (
+        {!deadlinePassed ? (
           <div className="py-12 text-center">
-            <p className="text-granite-grey text-lg" style={{ fontFamily: 'var(--font-inter), system-ui, sans-serif' }}>
-              Der er endnu ikke modtaget nogen tilbud på dette udbud.
+            <p className="text-granite-grey text-lg">
+              {submittedCount === 0
+                ? 'Der er endnu ikke modtaget tilbud.'
+                : `${submittedCount} tilbud modtaget. Indholdet kan først ses efter fristen.`}
             </p>
           </div>
+        ) : bids.length === 0 ? (
+          <div className="py-12 text-center">
+            <p className="text-granite-grey text-lg">Der blev ikke modtaget nogen tilbud.</p>
+          </div>
         ) : (
-          <BidsEvaluationTable
-            initialBids={sortedBids}
-            tenderId={params.id}
-            awardedBidId={tender.awarded_bid_id}
-          />
+          // awarded_bid_id kommer med migration #8 (award_bid-RPC); indtil da null
+          <BidsEvaluationTable initialBids={bids} tenderId={params.id} awardedBidId={null} />
         )}
       </BlockBidCard>
-
-      <EvaluationDocumentsUpload
-        tenderId={params.id}
-        initialDocuments={evaluationDocuments}
-      />
     </div>
   )
 }
-

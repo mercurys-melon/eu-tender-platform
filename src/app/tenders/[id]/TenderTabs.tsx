@@ -9,8 +9,7 @@ interface TenderTabsProps {
 
 const tabs = [
   { id: 'overview', label: 'Oversigt', href: (id: string) => `/tenders/${id}`, testId: 'tender-tab-overview' },
-  { id: 'documents', label: 'Dokumenter', href: (id: string) => `/tenders/${id}/documents`, testId: 'tender-tab-documents' },
-  { id: 'qna', label: 'Spørgsmål & svar', href: (id: string) => `/tenders/${id}/qna`, testId: 'tender-tab-qna' },
+  { id: 'manage', label: 'Administration', href: (id: string) => `/tenders/${id}/manage`, testId: 'tender-tab-manage' },
   { id: 'bids', label: 'Tilbud', href: (id: string) => `/tenders/${id}/bids`, testId: 'tender-tab-bids' },
 ]
 

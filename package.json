@@ -1,7 +1,7 @@
 {
   "name": "eu-tender-platform",
   "version": "1.0.0",
-  "description": "EU Tender Platform - Digital tender management system",
+  "description": "Mercurry Tender - udbudsportal til offentlige ordregivere",
   "private": true,
   "scripts": {
     "dev": "npx next dev",
@@ -25,7 +25,6 @@
     "db:types:dry": "node scripts/gen-types.mjs --dry-run"
   },
   "keywords": [
-    "blockbid",
     "tender",
     "nextjs",
     "typescript",
@@ -33,7 +32,7 @@
     "public-tendering",
     "supabase"
   ],
-  "author": "BlockBid",
+  "author": "FRANK-MERCURRY",
   "license": "MIT",
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",
@@ -44,7 +43,6 @@
     "@radix-ui/react-separator": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tooltip": "^1.2.8",
-    "@supabase/auth-helpers-nextjs": "^0.8.7",
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.38.0",
     "@types/fs-extra": "^11.0.4",
@@ -81,13 +79,5 @@
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/your-org/eu-tender-platform.git"
-  },
-  "bugs": {
-    "url": "https://github.com/your-org/eu-tender-platform/issues"
-  },
-  "homepage": "https://github.com/your-org/eu-tender-platform#readme"
+  }
 }

@@ -3,8 +3,8 @@ import { FAQ } from '@/components/marketing/FAQ'
 import { useTranslations } from '@/lib/i18n'
 
 export const metadata = {
-  title: 'Ofte stillede spørgsmål - BlockBid',
-  description: 'Find svar på de mest almindelige spørgsmål om BlockBid platformen, udbudsprocessen og vores tjenester.',
+  title: 'Ofte stillede spørgsmål - Mercurry Tender',
+  description: 'Find svar på de mest almindelige spørgsmål om Mercurry Tender platformen, udbudsprocessen og vores tjenester.',
 }
 
 export default function FAQPage() {
@@ -98,11 +98,8 @@ export default function FAQPage() {
                   {t.faq.cta.description}
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <a href="/contact" className="btn-primary bg-white text-nordic-blue hover:bg-silver-mist">
+                  <a href="mailto:kontakt@mercurrytender.dk" className="btn-primary bg-white text-nordic-blue hover:bg-silver-mist">
                     {t.faq.cta.primary}
-                  </a>
-                  <a href="/demo" className="btn-outline border-white text-white hover:bg-white hover:text-nordic-blue">
-                    {t.faq.cta.secondary}
                   </a>
                 </div>
               </div>

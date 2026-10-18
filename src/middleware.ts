@@ -70,10 +70,12 @@ async function refreshSession(req: NextRequest): Promise<{
     }
   )
 
+  // getUser() validerer JWT mod auth-serveren (getSession() læser blot cookien).
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    data: { user },
+  } = await supabase.auth.getUser()
 
+  const session = user ? { user: { id: user.id, email: user.email } } : null
   return { session, response }
 }
 
@@ -98,11 +100,11 @@ async function getRoleForSession(
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('active_role')
     .eq('id', userId)
     .maybeSingle()
 
-  return (profile as { role: string } | null)?.role ?? null
+  return (profile as { active_role: string } | null)?.active_role ?? null
 }
 
 // ---------------------------------------------------------------------------
@@ -132,16 +134,9 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  // ── 2. Eksisterende beskyttede ruter: KUN session-refresh, ingen redirect ─
-  // /buyer, /supplier, /tenders, /create, /dashboard har deres egen
-  // auth-logik i layouts/pages – middleware refresher kun cookies.
-  const SESSION_REFRESH_PREFIXES = [
-    '/buyer',
-    '/supplier',
-    '/tenders',
-    '/create',
-    '/dashboard',
-  ]
+  // ── 2. /tenders: KUN session-refresh, ingen redirect ──────────────────────
+  // Udbudssider er offentlige; /manage og /bids autoriserer selv server-side.
+  const SESSION_REFRESH_PREFIXES = ['/tenders']
   if (SESSION_REFRESH_PREFIXES.some((p) => pathname.startsWith(p))) {
     const { response } = await refreshSession(req)
     return response
@@ -173,12 +168,7 @@ export async function middleware(req: NextRequest) {
     if (session) {
       const role = await getRoleForSession(req, session.user.id)
       // Brug ny (app)-ruter for authenticated brugere; fallback til legacy
-      const target =
-        role === 'buyer'
-          ? '/ordregiver'
-          : role === 'supplier'
-          ? '/tilbudsgiver'
-          : '/tilbudsgiver'
+      const target = role === 'supplier' ? '/tilbudsgiver' : '/ordregiver'
       return NextResponse.redirect(new URL(target, req.url))
     }
     return response
@@ -197,14 +187,9 @@ export const config = {
     '/reset-password',
     '/update-password',
     '/verify-email',
-    // Eksisterende beskyttede ruter (session-refresh kun)
-    '/buyer',
-    '/buyer/:path*',
-    '/supplier',
-    '/supplier/:path*',
+    // Offentlige udbudssider (session-refresh kun)
+    '/tenders',
     '/tenders/:path*',
-    '/create/:path*',
-    '/dashboard/:path*',
     // (app)-ruter (session-refresh + gate)
     '/ordregiver',
     '/ordregiver/:path*',

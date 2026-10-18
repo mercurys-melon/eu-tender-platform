@@ -106,3 +106,6 @@ supabase/.temp/
 # Environment files
 .env.local
 .env*.local
+
+# Diagnose-output (indeholder bruger-id'er)
+scripts/sql/output/

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient, getServiceClient } from '@/lib/supabase/server'
 import { json, badRequest, unauthorized, internal } from '@/lib/http'
 import { logAction } from '@/lib/audit'
+import { getBuyerOrganisationId } from '@/lib/authz'
 
 export const runtime = 'nodejs'
 
@@ -28,28 +29,30 @@ export async function POST(request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) return unauthorized()
 
-    // Verify buyer role
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (profile?.role !== 'buyer') {
-      return json({ error: 'Kun indkøbere kan oprette udbud' }, 403)
+    // Ordregiver = medlem (owner/admin/editor) af en organisation.
+    // profiles.role er 'buyer' for alle nye brugere og kan derfor ikke bruges som autorisation.
+    const organisationId = await getBuyerOrganisationId(user.id)
+    if (!organisationId) {
+      return json(
+        { error: 'Din bruger er ikke tilknyttet en ordregiver-organisation. Kontakt support.' },
+        403,
+      )
     }
 
-    const body = await request.json()
-    console.log('[POST /api/tenders] body:', JSON.stringify(body))
+    const body = await request.json().catch(() => null)
     const result = createTenderSchema.safeParse(body)
     if (!result.success) {
-      console.log('[POST /api/tenders] Zod errors:', JSON.stringify(result.error.issues))
       return badRequest(result.error.issues[0]?.message ?? 'Ugyldige data')
     }
 
     const data = result.data
+    const deadline = new Date(data.submission_deadline)
+    if (Number.isNaN(deadline.getTime()) || deadline.getTime() <= Date.now()) {
+      return badRequest('Tilbudsfristen skal være en gyldig dato i fremtiden')
+    }
 
-    // Use service role to bypass RLS — auth + buyer-role already verified above
+    // Service role omgår RLS — auth + organisations-medlemskab er verificeret ovenfor.
+    // organisation_id er påkrævet for at bids-RLS (deadline-gated læseadgang) virker.
     const db = getServiceClient()
 
     const { data: tender, error } = await db
@@ -58,18 +61,21 @@ export async function POST(request: NextRequest) {
         title: data.title,
         description: data.description,
         entity_id: user.id,
-        submission_deadline: data.submission_deadline,
+        organisation_id: organisationId,
+        created_by: user.id,
+        submission_deadline: deadline.toISOString(),
         estimated_value: data.estimated_value ?? 0,
         category: data.category ?? '',
         currency: data.currency,
         status: 'draft',
+        // publication_date er NOT NULL i skemaet; overskrives ved faktisk publicering.
         publication_date: new Date().toISOString(),
       })
       .select('id, title, status, created_at')
       .single()
 
     if (error) {
-      console.error('[POST /api/tenders] DB error:', JSON.stringify(error))
+      console.error('[POST /api/tenders] DB error:', error.code, error.message)
       return internal('Kunne ikke oprette udbud. Prøv igen.')
     }
 

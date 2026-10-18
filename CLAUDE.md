@@ -119,29 +119,6 @@ Platformen skal overholde og facilitere overholdelse af:
 
 ⚠️ Denne sektion dokumenterer kendte issues identificeret i sessionen 2026-04-22, der SKAL adresseres inden ERST PROD-go-live.
 
-### Pre-existing RLS-policies anvendt på rollen 'public'
-
-Følgende tabeller har SELECT/INSERT/UPDATE/DELETE-policies anvendt på `public` eller `anon`-rolle (i stedet for `authenticated`):
-
-- `audit_logs`: "Buyers can view audit logs for owned tenders" (SELECT, public), "Users can view own audit logs" (SELECT, public)
-- `bids`: "read bids" (SELECT, anon+authenticated)
-- `profiles`: "Users can insert own profile", "Users can read own profile", "Users can update own profile" (alle public)
-- `tender_documents`: 4 policies anvendt på public
-- `tender_questions`: "read_published_qna" (SELECT, public)
-- `tenders`: "read all tenders" (SELECT, anon+authenticated)
-
-Disse policies stammer fra migrations_old/-filer skrevet under Cursor-perioden. De er IKKE skabt i den aktuelle session (alle nye policies bruger korrekt 'authenticated' som target).
-
-### Krav til adressering
-
-Inden ERST PROD-go-live SKAL vi:
-
-1. Granske USING-klausulen i hver policy for at vurdere om den faktisk lækker data til anonyme brugere
-2. Skelne mellem 'public role' (alle, inkl. anon) og 'public schema'
-3. For policies der reelt skal være offentlige (fx publicerede tenders): dokumentere hvorfor
-4. For policies der IKKE skal være åbne for anon: lave en migration der ændrer target til 'authenticated'
-5. Funktionelt teste at autentificerede brugere stadig har korrekt adgang efter ændringen
-
 ### Andre kendte issues
 
 - migrations_old/-mappen indeholder 8 historiske migrationsfiler der ikke er CLI-tracked. Konsoliderings-strategi udskydes til efter ERST PROD-go-live.
@@ -150,11 +127,7 @@ Inden ERST PROD-go-live SKAL vi:
 
 ### Identificeret 13. maj 2026 (P1-sessionen) — statusopdatering 27. maj 2026
 
-- **Payload-format mismatch:** `UdbudDKPayload` i `payload-builder.ts` producerer fladt JSON, men ERST forventer eForms UBL XML (per `openapi-udbud.yml` og `scripts/output/notice-payload.xml`). `service.ts` har TODO-kommentar. Skal fixes før første reelle PROD-publicering — uden korrekt format vil valider-endpoint returnere fejl. **Status 27. maj:** uændret. Estimeret arbejde 3-4 timer.
-
-- **Søge-API mangler i ERST-spec:** ✅ **Afklaret 21. maj 2026:** ERST bekræftede at API'et IKKE har søge-endpoint. Løsning er besluttet og dokumenteret i SCHEMA-DESIGN.md reference #9: periodisk sync via `fraKilde/{DKUDBUD}` til lokalt `notices`-indeks med tsvector + GIN. Mock-providere i `src/lib/search/providers/udbuddk.ts` erstattes som del af migration #9.
-
-- **getSession() advarsel fra Supabase:** Auth-koden bruger flere steder `getSession()` der ifølge Supabase's egne docs er usikker (læser cookies uden auth-server-verifikation). Best practice er `getUser()`. Skal adresseres som del af security-audit før produktion. **Status 27. maj:** uændret.
+- **Søge-API mangler i ERST-spec:** ✅ **Afklaret 21. maj 2026:** ERST bekræftede at API'et IKKE har søge-endpoint. Løsning er besluttet og dokumenteret i SCHEMA-DESIGN.md reference #9: periodisk sync via `fraKilde/{DKUDBUD}` til lokalt `notices`-indeks med tsvector + GIN. Mock-providerne i `src/lib/search/` er slettet 18. okt. 2026; søgning bygges fra bunden i migration #9.
 
 - **privatlivspolitik og vilkaar er stubs:** `src/app/privatlivspolitik/page.tsx` og `src/app/vilkaar/page.tsx` er placeholder-ruter uden reelt juridisk indhold. Skal udfyldes før pilotkunde åbnes. **Status 27. maj:** uændret; del af compliance-blokken før 8. juni-pilot.
 
@@ -165,6 +138,16 @@ Inden ERST PROD-go-live SKAL vi:
 - **`leads`-tabellen:** ubrugt teknisk gæld fra Cursor-perioden. **Status:** besluttet slettet permanent jf. SCHEMA-DESIGN.md #1. Migration `drop_leads` planlagt som første migration i 28.-31. maj-blokken.
 
 - **`bids.supplier_id` refererer `auth.users(id)` direkte:** mangler virksomheds-niveau i tilbudsgiver-modellen. **Status:** løsning besluttet jf. SCHEMA-DESIGN.md #5 — refactor til `supplier_organisation_id` med backfill. PITR restore-test prerequisite før PROD-deploy.
+
+### Identificeret 18. oktober 2026 (oprydning + pilot-sikkerhed)
+
+- **Publicering er deaktiveret:** `POST /api/tenders/[id]/publish` returnerer 501, indtil eForms UBL XML-generering og `publication_events` (SCHEMA-DESIGN.md #2) er bygget. `payload-builder.ts` og `service.ts` (fladt JSON-format, som ERST ikke accepterer) er slettet bevidst — genskab dem ikke.
+
+- **`tender_lots` findes ikke:** hverken i migrations eller i koden, men SCHEMA-DESIGN.md #6 (`awarded_bid_id`, `award_bid`/`cancel_award`) forudsætter tabellen. Skal oprettes før #6.
+
+- **npm audit: 33 sårbarheder** (1 kritisk, 24 høje — primært Next 14-kæden). Håndteres som kontrolleret opgradering i fase 1 af pilotplanen. Kør IKKE `npm audit fix --force` (giver breaking major-opgraderinger).
+
+- **mTLS/OCES3 mod ERST:** implementeret i `udbud-dk-client.ts` (aktiveres når `UDBUD_DK_CLIENT_ID` + `UDBUD_DK_MTLS_CERT_B64` + `UDBUD_DK_MTLS_KEY_B64` er sat; ellers Basic Auth). Afventer OCES3-certifikat på nyt CVR og tokenserver-spec fra ERST (sag #164788, påkrævet fra 31. januar 2027).
 
 ---
 
@@ -488,6 +471,6 @@ Når en ny Claude Code session startes, verificeres følgende:
 
 ---
 
-*Sidst opdateret: 27. maj 2026*
+*Sidst opdateret: 18. oktober 2026*
 *Projekt: eu-tender-platform*
 *Version: 2.2 (additiv delta-opdatering: tilføjet reference til SCHEMA-DESIGN.md v1.0, ny sektion "Schema-design v1.0", opdateret tabel-oversigt, opdaterede teknisk gæld-noter med 27. maj-status)*

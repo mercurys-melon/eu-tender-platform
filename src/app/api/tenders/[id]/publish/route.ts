@@ -1,130 +1,36 @@
 /**
- * API Route for publishing tenders to udbud.dk
+ * POST /api/tenders/[id]/publish — publicering til Udbud.dk.
+ *
+ * MIDLERTIDIGT DEAKTIVERET (okt. 2026): Den tidligere service sendte fladt JSON
+ * til en ikke-eksisterende publication_jobs-tabel. Genopbygges i pilotplanens
+ * fase 2 på: eForms UBL XML (skabelon fra bestået funktionel test),
+ * /valider før /publicer, og publication_events (#2) som audit-log.
+ * udbud-dk-client.ts (token-flow, miljø-guards, mTLS) er bevaret.
  */
-
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerClient } from '@/lib/supabase/server'
-import { publishToUdbud } from '@/lib/publication/service'
+import { getCurrentUser, getManagedTender } from '@/lib/authz'
 
-/**
- * POST /api/tenders/[id]/publish
- * Publishes a tender to udbud.dk
- */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const supabase = getServerClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+export const runtime = 'nodejs'
 
-    if (!user) {
-      return NextResponse.json({ error: 'Ikke autoriseret' }, { status: 401 })
-    }
-
-    // Verify user owns the tender
-    const { data: tender, error: tenderError } = await supabase
-      .from('tenders')
-      .select('entity_id')
-      .eq('id', params.id)
-      .single()
-
-    if (tenderError || !tender) {
-      return NextResponse.json({ error: 'Tender ikke fundet' }, { status: 404 })
-    }
-
-    if (tender.entity_id !== user.id) {
-      return NextResponse.json(
-        { error: 'Du har ikke tilladelse til at publicere denne tender' },
-        { status: 403 }
-      )
-    }
-
-    // Publish to udbud.dk
-    const result = await publishToUdbud(params.id)
-
-    if (result.success) {
-      return NextResponse.json(
-        {
-          success: true,
-          jobId: result.jobId,
-          status: result.status,
-          message: result.message,
-          requestId: result.requestId,
-        },
-        { status: 200 }
-      )
-    } else {
-      // Return validation/field errors in a structured way
-      return NextResponse.json(
-        {
-          success: false,
-          jobId: result.jobId,
-          status: result.status,
-          message: result.message,
-          errors: result.errors,
-          requestId: result.requestId,
-        },
-        { status: 400 }
-      )
-    }
-  } catch (error: any) {
-    console.error('Error in POST /api/tenders/[id]/publish:', error)
-    return NextResponse.json(
-      { error: 'Intern server fejl', message: error.message },
-      { status: 500 }
-    )
-  }
+async function authorize(tenderId: string) {
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: 'Ikke logget ind' }, { status: 401 })
+  const tender = await getManagedTender(user.id, tenderId)
+  if (!tender) return NextResponse.json({ error: 'Ingen adgang' }, { status: 403 })
+  return null
 }
 
-/**
- * GET /api/tenders/[id]/publish
- * Get publication status for a tender
- */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const supabase = getServerClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+export async function POST(_request: NextRequest, { params }: { params: { id: string } }) {
+  const denied = await authorize(params.id)
+  if (denied) return denied
+  return NextResponse.json(
+    { error: 'Publicering til Udbud.dk er ikke aktiveret endnu.' },
+    { status: 501 },
+  )
+}
 
-    if (!user) {
-      return NextResponse.json({ error: 'Ikke autoriseret' }, { status: 401 })
-    }
-
-    // Verify user owns the tender
-    const { data: tender, error: tenderError } = await supabase
-      .from('tenders')
-      .select('entity_id')
-      .eq('id', params.id)
-      .single()
-
-    if (tenderError || !tender) {
-      return NextResponse.json({ error: 'Tender ikke fundet' }, { status: 404 })
-    }
-
-    if (tender.entity_id !== user.id) {
-      return NextResponse.json(
-        { error: 'Du har ikke tilladelse til at se publikationsstatus' },
-        { status: 403 }
-      )
-    }
-
-    // Get publication jobs
-    const { getTenderPublicationJobs } = await import('@/lib/publication/service')
-    const jobs = await getTenderPublicationJobs(params.id)
-
-    return NextResponse.json({ jobs }, { status: 200 })
-  } catch (error: any) {
-    console.error('Error in GET /api/tenders/[id]/publish:', error)
-    return NextResponse.json(
-      { error: 'Intern server fejl', message: error.message },
-      { status: 500 }
-    )
-  }
+export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+  const denied = await authorize(params.id)
+  if (denied) return denied
+  return NextResponse.json({ jobs: [] }, { status: 200 })
 }

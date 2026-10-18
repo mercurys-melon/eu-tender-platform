@@ -154,10 +154,18 @@ export default function TenderDetailsClient({ id, initialTender = null, evaluati
               </div>
             )}
 
-            {/* Bid Form */}
-            <div className="card p-6">
-              <BidForm tenderId={tender.id} onSuccess={() => console.log('Bud indsendt')} />
-            </div>
+            {/* Bid Form — kun for tilbudsgivere på åbne udbud (API'et håndhæver det samme) */}
+            {!isOwner && tender.status === 'published' && new Date(tender.submission_deadline).getTime() > Date.now() && (
+              <div className="card p-6">
+                {user ? (
+                  <BidForm tenderId={tender.id} />
+                ) : (
+                  <p className="text-granite-grey">
+                    <a href={`/login?redirectTo=/tenders/${tender.id}`} className="underline">Log ind</a> for at afgive tilbud.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

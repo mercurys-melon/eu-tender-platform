@@ -1,14 +1,5 @@
-// Client-side helper til signed URLs (visning)
-import { supabase } from './supabase/client'
-
-export async function getSignedUrl(path: string, expiresIn = 600) {
-  const s = supabase()
-  const { data, error } = await s.storage.from('tender-docs').createSignedUrl(path, expiresIn)
-  if (error) throw error
-  return data.signedUrl
-}
-
 // Helper functions for file handling
+// Signerede URL'er udstedes kun server-side (src/lib/storage/server.ts) efter autorisation.
 const ALLOWED_MIME_TYPES = [
   'application/pdf',
   'application/msword',

@@ -1,9 +1,9 @@
 import { Buffer } from 'node:buffer'
+import { randomUUID } from 'node:crypto'
 import { NextRequest } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, getServiceClient } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/authz'
-import { validateFile } from '@/lib/storage'
-import { uploadDocument, deleteFile } from '@/lib/storage/server'
+import { validateFile, sanitizeFileName } from '@/lib/storage'
 import { json, badRequest, unauthorized, internal } from '@/lib/http'
 import type { Database } from '@/lib/supabase/types'
 import { logAction } from '@/lib/audit'
@@ -11,96 +11,107 @@ import { logAction } from '@/lib/audit'
 type BidsInsert = Database['public']['Tables']['bids']['Insert']
 
 export const runtime = 'nodejs'
+
+/**
+ * Privat bucket til tilbudsfiler. Læses KUN server-side via signerede URL'er
+ * efter tilbudsfristen (BEK 1572: fortrolighed indtil åbning).
+ */
 const BID_DOCUMENTS_BUCKET = 'bid-documents'
 
-async function generateBidStoragePath(tenderId: string, userId: string, fileName: string): Promise<string> {
-  const timestamp = Date.now()
-  const safeName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_')
-  return `${tenderId}/${userId}/${timestamp}_${safeName}`
-}
-
-async function uploadBidDocument(path: string, contents: ArrayBuffer | Uint8Array, contentType: string) {
-  const supabase = createClient()
-  const payload = contents instanceof Uint8Array ? contents : new Uint8Array(contents)
-
-  const { error } = await supabase.storage.from(BID_DOCUMENTS_BUCKET).upload(path, payload, {
-    contentType,
-    cacheControl: '3600',
-    upsert: false,
-  })
-
-  if (error) {
-    throw new Error(error.message)
-  }
-}
-
-// TODO: Implement extractPriceFromFile function
-// This will later parse XLS/XLSX/PDF files to extract price information
-// async function extractPriceFromFile(file: File): Promise<number | null> {
-//   // Implementation for parsing price from uploaded file
-//   // This can use libraries like xlsx for Excel files, pdf-parse for PDFs
-//   return null
-// }
-
+/**
+ * POST /api/bids — afgiv tilbud.
+ *
+ * Forsvar i dybden: RLS-policy "bids_supplier_insert" håndhæver allerede
+ * status='published' og frist > NOW(). Vi tjekker det samme eksplicit her,
+ * så filer ALDRIG uploades til et udbud, der ikke modtager tilbud.
+ */
 export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser()
-    if (!user) {
-      return unauthorized()
+    if (!user) return unauthorized()
+
+    const formData = await request.formData().catch(() => null)
+    if (!formData) return badRequest('Ugyldig formular')
+
+    const tenderId = String(formData.get('tender_id') ?? '')
+    const price = String(formData.get('price') ?? '')
+    const currency = String(formData.get('currency') ?? 'DKK').toUpperCase()
+
+    if (!tenderId || !price) return badRequest('Tender ID og pris er påkrævet')
+    if (!/^[A-Z]{3}$/.test(currency)) return badRequest('Ugyldig valuta')
+
+    const priceNum = Number(price.replace(',', '.'))
+    if (!Number.isFinite(priceNum) || priceNum <= 0) return badRequest('Gyldig pris er påkrævet')
+
+    const supabase = createClient()
+
+    // 1. Udbuddet skal være publiceret og fristen ikke udløbet
+    const { data: tender, error: tenderError } = await supabase
+      .from('tenders')
+      .select('id, status, submission_deadline')
+      .eq('id', tenderId)
+      .maybeSingle()
+
+    if (tenderError || !tender) return json({ error: 'Udbuddet findes ikke' }, 404)
+    if (tender.status !== 'published') {
+      return json({ error: 'Udbuddet modtager ikke tilbud' }, 409)
+    }
+    if (new Date(tender.submission_deadline).getTime() <= Date.now()) {
+      return json({ error: 'Tilbudsfristen er udløbet' }, 409)
     }
 
-    const formData = await request.formData()
-    const tenderId = formData.get('tender_id') as string
-    const price = formData.get('price') as string
-    const currency = formData.get('currency') as string || 'DKK'
-    const comment = formData.get('comment') as string || ''
+    // 2. Ét aktivt tilbud pr. tilbudsgiver. Nyt tilbud = træk det gamle tilbage først.
+    const { data: existing } = await supabase
+      .from('bids')
+      .select('id')
+      .eq('tender_id', tenderId)
+      .eq('supplier_id', user.id)
+      .limit(1)
 
-    if (!tenderId || !price) {
-      return badRequest('Tender ID og pris er påkrævet')
+    if (existing && existing.length > 0) {
+      return json(
+        { error: 'Du har allerede afgivet tilbud. Træk det tilbage for at afgive et nyt.' },
+        409,
+      )
     }
 
-    const priceNum = parseFloat(price)
-    if (isNaN(priceNum) || priceNum <= 0) {
-      return badRequest('Gyldig pris er påkrævet')
-    }
-
-    // Get all uploaded files
+    // 3. Filer: afvis hele afgivelsen hvis én fil er ugyldig (ingen stille frasortering)
     const files: File[] = []
-    const fileEntries = formData.getAll('documents')
-    for (const entry of fileEntries) {
-      if (entry instanceof File) {
-        const validation = validateFile(entry)
-        if (validation.valid) {
-          files.push(entry)
-        }
+    for (const entry of formData.getAll('documents')) {
+      if (!(entry instanceof File) || entry.size === 0) continue
+      const validation = validateFile(entry)
+      if (!validation.valid) return badRequest(`${entry.name}: ${validation.error}`)
+      files.push(entry)
+    }
+
+    // 4. Upload med service-role (autorisation er verificeret ovenfor)
+    const storage = getServiceClient().storage.from(BID_DOCUMENTS_BUCKET)
+    const documentPaths: string[] = []
+
+    const cleanup = async () => {
+      if (documentPaths.length > 0) {
+        await storage.remove(documentPaths).catch(() => undefined)
       }
     }
-
-    // Upload files to storage
-    const documentPaths: string[] = []
-    const uploadedFiles: { path: string; name: string }[] = []
 
     try {
       for (const file of files) {
-        const storagePath = await generateBidStoragePath(tenderId, user.id, file.name)
-        const fileBuffer = Buffer.from(await file.arrayBuffer())
-
-        await uploadBidDocument(storagePath, fileBuffer, file.type || 'application/octet-stream')
-        
-        documentPaths.push(storagePath)
-        uploadedFiles.push({ path: storagePath, name: file.name })
+        const path = `${tenderId}/${user.id}/${randomUUID()}-${sanitizeFileName(file.name)}`
+        const { error } = await storage.upload(path, Buffer.from(await file.arrayBuffer()), {
+          contentType: file.type || 'application/octet-stream',
+          upsert: false,
+        })
+        if (error) throw new Error(error.message)
+        documentPaths.push(path)
       }
-    } catch (uploadError: any) {
-      // Clean up any uploaded files on error
-      for (const path of documentPaths) {
-        await deleteFile(path).catch(() => undefined)
-      }
-      return badRequest(`Fejl ved upload af filer: ${uploadError.message}`)
+    } catch (uploadError) {
+      await cleanup()
+      console.error('[POST /api/bids] upload fejlede:', uploadError)
+      return internal('Upload af filer fejlede. Prøv igen.')
     }
 
-    // Insert bid into database
-    const supabase = createClient()
-    
+    // 5. Indsæt bid med brugerens klient, så RLS-policyen også håndhæves i DB
+    const submittedAt = new Date().toISOString()
     const { data: bidData, error: bidError } = await supabase
       .from('bids')
       .insert({
@@ -108,33 +119,38 @@ export async function POST(request: NextRequest) {
         supplier_id: user.id,
         created_by: user.id,
         amount: priceNum,
-        currency: currency,
-        documents: documentPaths.length > 0 ? documentPaths : [],
+        currency,
+        documents: documentPaths,
         status: 'submitted',
-        submitted_at: new Date().toISOString(),
-      } as BidsInsert)
-      .select('id, created_at')
-      .single<{ id: string; created_at: string }>()
+        submitted_at: submittedAt,
+      } satisfies BidsInsert)
+      .select('id, created_at, submitted_at')
+      .single()
 
-    if (bidError) {
-      // Clean up uploaded files if database insert fails
-      for (const path of documentPaths) {
-        await deleteFile(path).catch(() => undefined)
-      }
-      console.error('Error creating bid:', bidError)
-      return internal('Kunne ikke oprette bud. Prøv igen.')
+    if (bidError || !bidData) {
+      await cleanup()
+      console.error('[POST /api/bids] insert fejlede:', bidError?.code, bidError?.message)
+      return internal('Kunne ikke afgive tilbud. Prøv igen.')
     }
 
-    await logAction(user.id, 'bid.submitted', 'tender', tenderId, { bid_id: bidData.id, amount: priceNum, currency })
+    // VIGTIGT: Audit må ALDRIG indeholde pris/valuta — audit_logs kan læses af
+    // ordregiver, og ville ellers lække tilbudsindhold før fristen.
+    await logAction(user.id, 'bid.submitted', 'tender', tenderId, {
+      bid_id: bidData.id,
+      file_count: documentPaths.length,
+    })
 
-    return json({
-      id: bidData.id,
-      message: 'Bud oprettet succesfuldt',
-      created_at: bidData.created_at,
-    }, { status: 201 })
-  } catch (error: any) {
+    return json(
+      {
+        id: bidData.id,
+        message: 'Tilbud modtaget',
+        // Kvittering: serverens tidsstempel er det juridisk relevante
+        submitted_at: bidData.submitted_at,
+      },
+      { status: 201 },
+    )
+  } catch (error) {
     console.error('Error in POST /api/bids:', error)
     return internal('Intern server fejl')
   }
 }
-

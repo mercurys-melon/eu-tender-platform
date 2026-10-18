@@ -2,8 +2,29 @@
 
 Denne fil bevares som kontinuitet mellem AI-assisterede arbejdssessioner. Læs den ved start af hver ny session sammen med CLAUDE.md.
 
-**Sidst opdateret:** 27. maj 2026
-**Sidst aktive session:** 26. maj 2026 (P1 og P2 designsamtaler — alle 14 schema-designbeslutninger låst; SCHEMA-DESIGN.md kom IKKE på disk pga. Claude Code Write-tool-bug)
+**Sidst opdateret:** 18. oktober 2026
+**Sidst aktive session:** 18. oktober 2026 (oprydning + pilot-sikkerhedshærdning)
+
+---
+
+## 18. oktober 2026
+
+**Oprydning:** `scripts/oprydning-2026-10-18.ps1` fjernede 117 filer (død kode fra Cursor-perioden, legacy-ruter `/buyer`, `/supplier`, `/dashboard` m.fl., rod-Markdown). Typecheck 0 fejl, build grønt.
+
+**Showstoppers lukket (migration `20261018120000_pilot_security_hardening.sql`):**
+- Kladde-udbud og dokumenter var læsbare for anon (`USING true`) → kun ikke-kladder/`is_public`
+- Spørgers identitet i `tender_questions` var læsbar for alle → kolonne-lås
+- Klient kunne INSERT/UPDATE `tenders` og skrive `tender_documents` med vilkårlig `storage_path` → al skrivning via API (service-role); API validerer sti-prefix
+- Tilbudsfrist kunne fremrykkes efter publicering (brød forsegling) → trigger
+- Tilbudspriser i `audit_logs` → fjernet; alle buckets private, `bid-documents` oprettet
+
+**Kørt i Supabase:** migration → `scripts/sql/seed-testorganisation.sql` (Test Boligselskab, CVR 99999999; 3 udbud tilknyttet) → diagnose. Før/efter i `scripts/sql/output/` (git-ignoreret): røde flag 2 → 0, policies 41 → 34, udbud uden org 3 → 0, audit-priser 0.
+
+**Smoketest (uden login):** `/tenders` 200, kladde-dokumenter 404, publicerede dokumenter/Q&A 200 uden persondata, `/api/bids` 401, publish 401, `/ordregiver` 307 → `/login`, `/buyer` 308 → `/ordregiver`.
+
+**Afventer:** ERST-overflytning til nyt CVR (OCES3-certifikat + tokenserver-spec, sag #164788). Publicering er deaktiveret (501) indtil eForms UBL XML + `publication_events`.
+
+**Næste skridt:** fase 1 i pilotplanen (inkl. kontrolleret Next-opgradering for npm audit).
 
 ---
 

@@ -21,21 +21,19 @@ interface TenderSectionProps {
 }
 
 function getPrimaryAction(tender: TenderWithStats): { label: string; href: string } {
+  const manage = `/tenders/${tender.id}/manage`
+  const bids = `/tenders/${tender.id}/bids`
   switch (tender.status) {
     case 'draft':
-      return { label: 'Fortsæt med at oprette', href: `/buyer/mine-udbud/${tender.id}` }
+      return { label: 'Fortsæt med at oprette', href: manage }
     case 'published':
-      return { label: tender.participants_count ? 'Se ansøgninger' : 'Administrer udbud', href: `/buyer/mine-udbud/${tender.id}` }
-    case 'prequalification':
-      return { label: 'Vurder ansøgninger', href: `/buyer/mine-udbud/${tender.id}` }
-    case 'bidding':
-      return { label: 'Se tilbud', href: `/buyer/mine-udbud/${tender.id}` }
+      return { label: 'Administrer udbud', href: manage }
     case 'evaluation':
-      return { label: 'Evaluer tilbud', href: `/buyer/mine-udbud/${tender.id}` }
+      return { label: 'Evaluer tilbud', href: bids }
     case 'awarded':
-      return { label: 'Se tildelingsresultat', href: `/buyer/mine-udbud/${tender.id}` }
+      return { label: 'Se tildelingsresultat', href: bids }
     default:
-      return { label: 'Se udbud', href: `/buyer/mine-udbud/${tender.id}` }
+      return { label: 'Se udbud', href: `/tenders/${tender.id}` }
   }
 }
 

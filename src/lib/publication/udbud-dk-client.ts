@@ -12,8 +12,17 @@
  *   2. Modtag { access_token: string, expires_in: number }  (expires_in ≈ 600s fra ERST)
  *   3. Bearer {accessToken} på alle efterfølgende API-kald
  *   4. Automatisk refresh 60s før token-udløb (TOKEN_REFRESH_MARGIN_MS)
+ *
+ * mTLS / OCES3 (ERST sag #164788 — påkrævet fra 31. januar 2027):
+ *   Når UDBUD_DK_CLIENT_ID + UDBUD_DK_MTLS_CERT_B64 + UDBUD_DK_MTLS_KEY_B64 er sat,
+ *   hentes token fra den nye tokenserver med klientcertifikat (RFC 8705-mønster:
+ *   grant_type=client_credentials&client_id=...). Ellers bruges Basic Auth som før.
+ *   ⚠️ Request-formatet er IKKE verificeret mod ERST's endelige spec — bekræft
+ *   token-URL og body-parametre med system@udbud.dk og test mod PREPROD først.
+ *   Kører kun i Node-runtime (node:https) — ikke Edge.
  */
 
+import https from 'node:https'
 import { env } from '@/config/env'
 
 export type UdbudDkEnvironment = 'preprod' | 'prod'
@@ -115,6 +124,42 @@ async function fetchAccessToken(targetEnv: UdbudDkEnvironment): Promise<string> 
     return tokenCache[targetEnv]!.accessToken
   }
 
+  const data = isMtlsConfigured()
+    ? await requestTokenWithMtls(targetEnv)
+    : await requestTokenWithBasicAuth(targetEnv)
+
+  if (!data.access_token) {
+    throw new Error(`[UDBUD-DK ${targetEnv}] token-svar mangler access_token-felt`)
+  }
+
+  // Cache token med udløbstidspunkt fra expires_in (ERST: typisk 600s)
+  tokenCache[targetEnv] = {
+    accessToken: data.access_token,
+    expiresAt: Date.now() + data.expires_in * 1000,
+  }
+
+  console.log(
+    `[UDBUD-DK ${targetEnv}] access token hentet via ${isMtlsConfigured() ? 'mTLS' : 'Basic Auth'} ` +
+      `(udløber om ${data.expires_in}s)`,
+  )
+
+  return data.access_token
+}
+
+/** True når alle tre mTLS-værdier er sat (delvis konfiguration er en fejl). */
+export function isMtlsConfigured(): boolean {
+  const { clientId, certB64, keyB64 } = env.udbudDk.mtls
+  const present = [clientId, certB64, keyB64].filter(Boolean).length
+  if (present > 0 && present < 3) {
+    throw new Error(
+      '[UDBUD-DK] Ufuldstændig mTLS-konfiguration: UDBUD_DK_CLIENT_ID, UDBUD_DK_MTLS_CERT_B64 ' +
+        'og UDBUD_DK_MTLS_KEY_B64 skal alle være sat (eller ingen af dem).',
+    )
+  }
+  return present === 3
+}
+
+async function requestTokenWithBasicAuth(targetEnv: UdbudDkEnvironment): Promise<TokenResponse> {
   // Credentials-tjek: kræves for begge miljøer (ERST bekræftet: samme par til PREPROD og PROD)
   const missing: string[] = []
   if (!env.udbudDk.basicUser) missing.push('UDBUD_DK_BASIC_USER')
@@ -132,7 +177,7 @@ async function fetchAccessToken(targetEnv: UdbudDkEnvironment): Promise<string> 
     `${env.udbudDk.basicUser}:${env.udbudDk.basicPass}`,
   ).toString('base64')
 
-  console.log(`[UDBUD-DK ${targetEnv}] henter ny access token`)
+  console.log(`[UDBUD-DK ${targetEnv}] henter ny access token (Basic Auth)`)
 
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), TOKEN_FETCH_TIMEOUT_MS)
@@ -156,26 +201,91 @@ async function fetchAccessToken(targetEnv: UdbudDkEnvironment): Promise<string> 
       )
     }
 
-    const data = (await response.json()) as TokenResponse
-
-    if (!data.access_token) {
-      throw new Error(`[UDBUD-DK ${targetEnv}] token-svar mangler access_token-felt`)
-    }
-
-    // Cache token med udløbstidspunkt fra expires_in (ERST: typisk 600s)
-    tokenCache[targetEnv] = {
-      accessToken: data.access_token,
-      expiresAt: Date.now() + data.expires_in * 1000,
-    }
-
-    console.log(
-      `[UDBUD-DK ${targetEnv}] access token hentet (udløber om ${data.expires_in}s)`,
-    )
-
-    return data.access_token
+    return (await response.json()) as TokenResponse
   } finally {
     clearTimeout(timeoutId)
   }
+}
+
+/** mTLS-agent genbruges på tværs af kald i samme proces (TLS-session-genbrug). */
+let mtlsAgent: https.Agent | null = null
+
+function getMtlsAgent(): https.Agent {
+  if (mtlsAgent) return mtlsAgent
+  const { certB64, keyB64, keyPassphrase } = env.udbudDk.mtls
+  mtlsAgent = new https.Agent({
+    cert: Buffer.from(certB64!, 'base64').toString('utf8'),
+    key: Buffer.from(keyB64!, 'base64').toString('utf8'),
+    passphrase: keyPassphrase || undefined,
+    keepAlive: true,
+  })
+  return mtlsAgent
+}
+
+function getMtlsTokenUrl(targetEnv: UdbudDkEnvironment): string {
+  const url =
+    targetEnv === 'prod' ? env.udbudDk.mtls.prodTokenUrl : env.udbudDk.mtls.preprodTokenUrl
+  if (!url) {
+    const name =
+      targetEnv === 'prod' ? 'UDBUD_DK_PROD_MTLS_TOKEN_URL' : 'UDBUD_DK_PREPROD_MTLS_TOKEN_URL'
+    throw new Error(`[UDBUD-DK] mTLS er konfigureret, men ${name} mangler`)
+  }
+  return url
+}
+
+/**
+ * Token via mTLS med OCES3-organisationscertifikat.
+ * Bruger node:https (ikke fetch), fordi klientcertifikat kræver en https.Agent.
+ */
+function requestTokenWithMtls(targetEnv: UdbudDkEnvironment): Promise<TokenResponse> {
+  const url = new URL(getMtlsTokenUrl(targetEnv))
+  const body = new URLSearchParams({
+    grant_type: 'client_credentials',
+    client_id: env.udbudDk.mtls.clientId!,
+  }).toString()
+
+  console.log(`[UDBUD-DK ${targetEnv}] henter ny access token (mTLS)`)
+
+  return new Promise<TokenResponse>((resolve, reject) => {
+    const req = https.request(
+      url,
+      {
+        method: 'POST',
+        agent: getMtlsAgent(),
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': Buffer.byteLength(body),
+        },
+        timeout: TOKEN_FETCH_TIMEOUT_MS,
+      },
+      (res) => {
+        const chunks: Buffer[] = []
+        res.on('data', (c: Buffer) => chunks.push(c))
+        res.on('end', () => {
+          const text = Buffer.concat(chunks).toString('utf8')
+          const status = res.statusCode ?? 0
+          if (status < 200 || status >= 300) {
+            reject(
+              new Error(
+                `[UDBUD-DK ${targetEnv}] mTLS token-hentning fejlede: HTTP ${status}` +
+                  (text ? ` — ${text.substring(0, 200)}` : ''),
+              ),
+            )
+            return
+          }
+          try {
+            resolve(JSON.parse(text) as TokenResponse)
+          } catch {
+            reject(new Error(`[UDBUD-DK ${targetEnv}] mTLS token-svar er ikke gyldig JSON`))
+          }
+        })
+      },
+    )
+    req.on('timeout', () => req.destroy(new Error(`[UDBUD-DK ${targetEnv}] mTLS token-timeout`)))
+    req.on('error', reject)
+    req.write(body)
+    req.end()
+  })
 }
 
 /**

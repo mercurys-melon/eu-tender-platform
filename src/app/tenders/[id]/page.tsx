@@ -32,12 +32,12 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
       .single()
 
     const title = tender?.title 
-      ? `${tender.title} – BlockBid`
-      : `Udbud #${params.id} – BlockBid`
+      ? `${tender.title} – Mercurry Tender`
+      : `Udbud #${params.id} – Mercurry Tender`
     
     const description = tender?.description 
       ? tender.description.substring(0, 160) + (tender.description.length > 160 ? '...' : '')
-      : 'Se detaljer for dette udbud på BlockBid'
+      : 'Se detaljer for dette udbud på Mercurry Tender'
 
     return {
       title,
@@ -56,10 +56,10 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
     }
   } catch (error) {
     // Fallback metadata if tender fetch fails
-    const title = `Udbud #${params.id} – BlockBid`
+    const title = `Udbud #${params.id} – Mercurry Tender`
     return {
       title,
-      description: 'Se detaljer for dette udbud på BlockBid',
+      description: 'Se detaljer for dette udbud på Mercurry Tender',
       openGraph: {
         title,
         type: 'website',

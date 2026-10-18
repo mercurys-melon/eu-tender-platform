@@ -7,8 +7,7 @@
  * Jf. CLAUDE.md sessionsstart-checklist pkt. 1.
  *
  * Nye felter (ift. v1): TED-udvidelse, Udbud.dk, ESPD, Anthropic, OpenAI,
- * Sentry, Supabase-region, runtime-felter. Bagudkompatibelt: 'env.supabase.*',
- * 'env.app.*', 'env.email.*' og 'blockBidConfig' bevares.
+ * Sentry, Supabase-region, runtime-felter, mTLS/OCES3.
  */
 import { z } from 'zod'
 
@@ -69,6 +68,16 @@ const serverSchema = z.object({
   UDBUD_DK_PROD_API_URL: optionalUrl(),
   UDBUD_DK_PREPROD_TOKEN_URL: optionalUrl(),
   UDBUD_DK_PROD_TOKEN_URL: optionalUrl(),
+  // --- mTLS / OCES3 (ERST-krav fra 31. januar 2027, sag #164788) ---
+  // Når CLIENT_ID + CERT + KEY er sat, bruges mTLS-tokenflowet i stedet for Basic Auth.
+  // CERT/KEY er base64-kodet PEM (se scripts/oces3-til-pem.ps1). Må ALDRIG committes.
+  UDBUD_DK_CLIENT_ID: optionalStr(),
+  UDBUD_DK_MTLS_CERT_B64: optionalStr(),
+  UDBUD_DK_MTLS_KEY_B64: optionalStr(),
+  UDBUD_DK_MTLS_KEY_PASSPHRASE: optionalStr(),
+  // Ny tokenserver (ERST: tilgængelig fra ultimo sept. 2026). URL skal bekræftes af ERST.
+  UDBUD_DK_PREPROD_MTLS_TOKEN_URL: optionalUrl(),
+  UDBUD_DK_PROD_MTLS_TOKEN_URL: optionalUrl(),
   // @deprecated — erstattet af UDBUD_DK_PREPROD_API_URL og OIDC-flow; bevaret for at undgå opstartscrash
   UDBUD_DK_API_KEY: optionalStr(),
   // @deprecated — erstattet af UDBUD_DK_PREPROD_API_URL; bevaret for at undgå opstartscrash
@@ -114,7 +123,7 @@ const serverSchema = z.object({
   // --- Observability ---
   SENTRY_DSN: optionalUrl(),
 
-  // --- BlockBid (legacy, optional) ---
+  // --- Mercurry Tender (legacy, optional) ---
   BLOCKBID_BASE_URL: optionalStr(),
   BLOCKBID_EMAIL: optionalStr(),
   BLOCKBID_PASSWORD: optionalStr(),
@@ -157,6 +166,14 @@ export const env = {
     prodApiUrl: serverEnv.UDBUD_DK_PROD_API_URL as string | undefined,
     preprodTokenUrl: serverEnv.UDBUD_DK_PREPROD_TOKEN_URL as string | undefined,
     prodTokenUrl: serverEnv.UDBUD_DK_PROD_TOKEN_URL as string | undefined,
+    mtls: {
+      clientId: serverEnv.UDBUD_DK_CLIENT_ID as string | undefined,
+      certB64: serverEnv.UDBUD_DK_MTLS_CERT_B64 as string | undefined,
+      keyB64: serverEnv.UDBUD_DK_MTLS_KEY_B64 as string | undefined,
+      keyPassphrase: serverEnv.UDBUD_DK_MTLS_KEY_PASSPHRASE as string | undefined,
+      preprodTokenUrl: serverEnv.UDBUD_DK_PREPROD_MTLS_TOKEN_URL as string | undefined,
+      prodTokenUrl: serverEnv.UDBUD_DK_PROD_MTLS_TOKEN_URL as string | undefined,
+    },
   },
   ted: {
     apiKey: serverEnv.TED_API_KEY as string | undefined,
@@ -187,33 +204,8 @@ export const env = {
   observability: {
     sentryDsn: serverEnv.SENTRY_DSN as string | undefined,
   },
-  // Bevaret for bagudkompatibilitet med blockBidConfig
   app: {
-    baseUrl:
-      (serverEnv.BLOCKBID_BASE_URL as string) || 'https://blockbid.dk',
-    email: (serverEnv.BLOCKBID_EMAIL as string) || '',
-    password: (serverEnv.BLOCKBID_PASSWORD as string) || '',
-    timezone:
-      (serverEnv.DEFAULT_TIMEZONE as string) || 'Europe/Copenhagen',
+    baseUrl: serverEnv.NEXT_PUBLIC_APP_URL ?? 'https://mercurrytender.dk',
+    timezone: (serverEnv.DEFAULT_TIMEZONE as string) || 'Europe/Copenhagen',
   },
-}
-
-/**
- * Compatibility export - BEVARET fra v1.
- * Hvis dine eksisterende scripts importerer `blockBidConfig`, virker de uændret.
- * Nye integrationer bør importere `env` direkte.
- */
-export const blockBidConfig = {
-  baseUrl: env.app.baseUrl,
-  email: env.app.email,
-  password: env.app.password,
-  timezone: env.app.timezone,
-  language: 'da-DK',
-  artifactsDir: './artifacts',
-  publishingMode: 'ui' as const,
-  tedApiBaseUrl: env.ted.baseUrl || '',
-  tedClientId: env.ted.clientId,
-  tedClientSecret: env.ted.clientSecret,
-  espdApiBaseUrl: env.espd.baseUrl || '',
-  espdApiKey: env.espd.apiKey,
 }

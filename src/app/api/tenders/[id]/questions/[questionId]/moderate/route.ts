@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getServiceClient } from '@/lib/supabase/server'
 import { getCurrentUser, assertTenderOwner } from '@/lib/authz'
 import { z } from 'zod'
 import { json, badRequest, unauthorized, internal } from '@/lib/http'
@@ -23,7 +23,6 @@ export async function PATCH(
   { params }: { params: { id: string; questionId: string } }
 ) {
   try {
-    const supabase = createClient()
     const user = await getCurrentUser()
     
     if (!user) {
@@ -38,6 +37,9 @@ export async function PATCH(
         { status: 403 }
       )
     }
+
+    // Service-role efter ejerskabstjek: kontaktfelter er kolonne-låst for authenticated.
+    const supabase = getServiceClient()
 
     const body = await request.json()
     const validatedData = moderationSchema.parse(body)

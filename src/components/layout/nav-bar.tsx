@@ -95,17 +95,14 @@ export function NavBar() {
       <nav className="container-blockbid h-14 flex items-center justify-between">
         {/* Left: logo */}
         <Link href="/" className="flex items-center gap-2" data-testid="nav-logo">
-          <div className="w-6 h-6 rounded-md bg-nordic-blue text-white grid place-items-center font-poppins font-bold text-sm">B</div>
-          <span className="text-lg font-poppins font-semibold text-granite-grey tracking-wide">BLOCKBID</span>
+          <div className="w-6 h-6 rounded-md bg-nordic-blue text-white grid place-items-center font-poppins font-bold text-sm">M</div>
+          <span className="text-lg font-poppins font-semibold text-granite-grey tracking-wide">Mercurry Tender</span>
         </Link>
 
         {/* Center: navigation */}
         <nav className="hidden md:flex items-center gap-2" data-testid="nav-main">
           <NavItem href="/tenders" testId="nav-tenders">Udbud</NavItem>
-          <NavItem href="/create" testId="nav-create">Opret</NavItem>
-          <NavItem href="/documents">Dokumenter</NavItem>
-          <NavItem href="/about">Om</NavItem>
-          <NavItem href="/contact">Kontakt</NavItem>
+          <NavItem href="/faq">FAQ</NavItem>
         </nav>
 
         {/* Right: auth / dashboard */}
@@ -207,4 +204,4 @@ export function NavBar() {
       </nav>
     </header>
   )
-}
+}

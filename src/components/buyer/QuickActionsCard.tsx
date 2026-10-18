@@ -34,25 +34,17 @@ interface QuickAction {
 }
 
 const quickActions: QuickAction[] = [
+  // Kun handlinger med eksisterende sider. ESPD-skabeloner og organisations-
+  // administration tilføjes, når siderne findes (se pilotplan).
   {
-    href: '/tenders/new',
+    href: '/ordregiver/opret',
     label: 'Opret nyt udbud',
     icon: <FilePlusIcon />,
   },
   {
-    href: '/buyer/tenders',
-    label: 'Se alle udbud',
+    href: '/tenders',
+    label: 'Se offentlige udbud',
     icon: <FolderIcon />,
-  },
-  {
-    href: '/buyer/espd-templates',
-    label: 'ESPD-skabeloner',
-    icon: <FileTextIcon />,
-  },
-  {
-    href: '/buyer/settings',
-    label: 'Organisation & brugere',
-    icon: <SettingsIcon />,
   },
 ]
 

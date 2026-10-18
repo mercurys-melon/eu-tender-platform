@@ -14,7 +14,7 @@ export default function HomePage() {
           <div className="space-y-5">
             <h1 className="text-h1 text-white">Effektive digitale udbudsløsninger</h1>
             <p className="text-lg text-silver-mist">
-              Gennemsigtige og enkle for alle parter. BlockBid gør det nemt at deltage i og administrere offentlige udbud.
+              Gennemsigtige og enkle for alle parter. Mercurry Tender gør det nemt at deltage i og administrere offentlige udbud.
             </p>
           </div>
           <div className="hidden lg:block">
