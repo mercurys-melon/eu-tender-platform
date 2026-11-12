@@ -14,12 +14,16 @@ Denne fil bevares som kontinuitet mellem AI-assisterede arbejdssessioner. Læs d
 - Frist og status håndhæves nu i databasen: `trg_bids_guard_insert` (alle roller) afviser med 22023 og stempler `status` + `submitted_at`.
 - Unik-indeks `bids_tender_supplier_unique` på `(tender_id, supplier_id)` (0 dubletter verificeret før kørsel).
 - `get_bid_metadata_for_tender()` udleverede `supplier_id`/`submitted_at` til ordregiver før fristen → EXECUTE fjernet for klient-roller; erstattet af `get_bid_count_for_tender()` (kun antal) via `src/lib/bids/count.ts`.
-- Dedikeret `trg_bids_set_updated_at` erstatter legacy `update_bids_updated_at`.
+- Dedikeret `trg_bids_set_updated_at` erstatter den eksisterende `trg_bids_updated_at`.
 - `diagnose-rls.sql` udvidet med nøgle 11-13.
 
 **Verificeret:** typecheck 0 fejl, build grønt.
 
-**Afventer kørsel i Supabase:** deploy kode → diagnose (før) → migration → diagnose (efter, tjek nøgle 11-13) → `npm run db:types` → typecheck.
+**Kørt i Supabase 12. nov.:** diagnose (før) → migration → diagnose (efter). Før/efter i `scripts/sql/output/` (git-ignoreret). Nøgle 11: alle otte skriveprivilegier false. Nøgle 12: kun `ny_count:authenticated` true. Nøgle 13: triggerne `audit_bids`, `trg_bids_guard_insert`, `trg_bids_set_updated_at` og indekset `bids_tender_supplier_unique`. Røde flag 0. `npm run db:types` kørt (kun den nye RPC + kosmetik), typecheck 0 fejl. Commits `fe2d76a..f204ad4` pushet.
+
+**Afvigelse fundet i live-DB:** `updated_at`-triggeren på `bids` hed `trg_bids_updated_at` (funktion `set_bids_updated_at()`), ikke `update_bids_updated_at` som i `migrations_old/001`. Migrationen dropper nu begge navne. Funktionen `set_bids_updated_at()` ligger tilbage ubrugt.
+
+**Lokalt værktøj:** `npm run db:types` kræver, at Supabase-CLI'en er hentet (`npx --yes supabase --version`), ellers fejler scriptet på npx's installationsspørgsmål. `scripts/gen-types.mjs` giver to advarsler (`--project-id` forældet, DEP0190), som skal ryddes op.
 
 **Åbne punkter:**
 - `DELETE /api/bids/[id]` mangler: et afgivet tilbud kan kun trækkes tilbage via direkte PostgREST-DELETE, og filer i `bid-documents` bliver forældreløse. Skal bygges, før tilbudsgivere kan rette et tilbud i UI.
