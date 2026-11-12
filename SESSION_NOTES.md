@@ -2,8 +2,29 @@
 
 Denne fil bevares som kontinuitet mellem AI-assisterede arbejdssessioner. Læs den ved start af hver ny session sammen med CLAUDE.md.
 
-**Sidst opdateret:** 18. oktober 2026
-**Sidst aktive session:** 18. oktober 2026 (oprydning + pilot-sikkerhedshærdning)
+**Sidst opdateret:** 12. november 2026
+**Sidst aktive session:** 12. november 2026 (bids skrivelås)
+
+---
+
+## 12. november 2026
+
+**Bids skrivelås (migration `20261112120000_bids_column_lock.sql`):**
+- Tilbudsgiver kunne via PostgREST sætte `status='winner'` eller ændre `documents`, `tender_id`, `supplier_id` og `submitted_at` (UPDATE, eller DELETE + INSERT) → klienten har ikke længere INSERT/UPDATE på `bids`; policies `bids_supplier_insert` og `bids_supplier_update_before_deadline` droppet. Al skrivning via `POST /api/bids` (service-role) og `update_bid_status()`.
+- Frist og status håndhæves nu i databasen: `trg_bids_guard_insert` (alle roller) afviser med 22023 og stempler `status` + `submitted_at`.
+- Unik-indeks `bids_tender_supplier_unique` på `(tender_id, supplier_id)` (0 dubletter verificeret før kørsel).
+- `get_bid_metadata_for_tender()` udleverede `supplier_id`/`submitted_at` til ordregiver før fristen → EXECUTE fjernet for klient-roller; erstattet af `get_bid_count_for_tender()` (kun antal) via `src/lib/bids/count.ts`.
+- Dedikeret `trg_bids_set_updated_at` erstatter legacy `update_bids_updated_at`.
+- `diagnose-rls.sql` udvidet med nøgle 11-13.
+
+**Verificeret:** typecheck 0 fejl, build grønt.
+
+**Afventer kørsel i Supabase:** deploy kode → diagnose (før) → migration → diagnose (efter, tjek nøgle 11-13) → `npm run db:types` → typecheck.
+
+**Åbne punkter:**
+- `DELETE /api/bids/[id]` mangler: et afgivet tilbud kan kun trækkes tilbage via direkte PostgREST-DELETE, og filer i `bid-documents` bliver forældreløse. Skal bygges, før tilbudsgivere kan rette et tilbud i UI.
+- Insert-triggeren gælder også service-role og SQL Editor: seed-/testdata med tilbud på lukkede udbud kræver `ALTER TABLE public.bids DISABLE TRIGGER trg_bids_guard_insert` omkring indsættelsen.
+- Unik-indekset skal erstattes af `(tender_id, supplier_organisation_id)` i #5 bids-refactor.
 
 ---
 

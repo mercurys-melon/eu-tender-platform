@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getCurrentUser, getManagedTender } from '@/lib/authz'
+import { getBidCount } from '@/lib/bids/count'
 import { BlockBidCard } from '@/components/ui/blockbid-card'
 import { BidsEvaluationTable } from '@/components/tenders/BidsEvaluationTable'
 import type { Database } from '@/lib/supabase/types'
@@ -14,7 +15,8 @@ type BidRow = Database['public']['Tables']['bids']['Row']
  *
  * Adgang: kun brugere der administrerer udbuddet (tjekkes eksplicit her).
  * Fortrolighed: bids-RLS ("bids_buyer_select_after_deadline") udleverer først
- * tilbud efter fristen. Før fristen vises kun antal via metadata-RPC'en.
+ * tilbud efter fristen. Før fristen vises kun antal via get_bid_count_for_tender
+ * (ingen identitet eller tidspunkter).
  */
 export default async function BidsPage({ params }: { params: { id: string } }) {
   const user = await getCurrentUser()
@@ -38,11 +40,7 @@ export default async function BidsPage({ params }: { params: { id: string } }) {
     if (error) console.error('[bids page] kunne ikke hente bud:', error.message)
     bids = data ?? []
   } else {
-    const { data, error } = await supabase.rpc('get_bid_metadata_for_tender', {
-      p_tender_id: params.id,
-    })
-    if (error) console.error('[bids page] metadata-RPC fejlede:', error.message)
-    submittedCount = (data ?? []).length
+    submittedCount = await getBidCount(supabase, params.id)
   }
 
   const deadlineText = new Date(tender.submission_deadline).toLocaleString('da-DK', {

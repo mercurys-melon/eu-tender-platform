@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getUser } from '@/lib/auth'
 import { getMyOrganisationIds } from '@/lib/authz'
+import { getBidCount } from '@/lib/bids/count'
 import { redirect } from 'next/navigation'
 import { UpcomingDeadlinesCard } from '@/components/tenders/UpcomingDeadlinesCard'
 import { QuickActionsCard } from '@/components/buyer/QuickActionsCard'
@@ -17,8 +18,8 @@ interface TenderWithStats extends Tender {
 
 /**
  * Udbud brugeren administrerer: via organisations-medlemskab ELLER legacy entity_id.
- * Antal tilbud hentes via metadata-RPC'en, fordi bids-RLS (korrekt) skjuler
- * tilbuddene for ordregiver indtil fristen.
+ * Antal tilbud hentes via get_bid_count_for_tender, fordi bids-RLS (korrekt)
+ * skjuler tilbuddene for ordregiver indtil fristen.
  */
 async function getBuyerTenders(userId: string): Promise<TenderWithStats[]> {
   const supabase = createClient()
@@ -41,15 +42,10 @@ async function getBuyerTenders(userId: string): Promise<TenderWithStats[]> {
   }
 
   return Promise.all(
-    (tenders ?? []).map(async (tender) => {
-      const { data: meta } = await supabase.rpc('get_bid_metadata_for_tender', {
-        p_tender_id: tender.id,
-      })
-      return {
-        ...(tender as Tender),
-        bids_count: (meta ?? []).length,
-      }
-    }),
+    (tenders ?? []).map(async (tender) => ({
+      ...(tender as Tender),
+      bids_count: await getBidCount(supabase, tender.id),
+    })),
   )
 }
 

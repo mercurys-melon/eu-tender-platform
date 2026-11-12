@@ -21,9 +21,16 @@ const BID_DOCUMENTS_BUCKET = 'bid-documents'
 /**
  * POST /api/bids — afgiv tilbud.
  *
- * Forsvar i dybden: RLS-policy "bids_supplier_insert" håndhæver allerede
- * status='published' og frist > NOW(). Vi tjekker det samme eksplicit her,
- * så filer ALDRIG uploades til et udbud, der ikke modtager tilbud.
+ * Klienten har ingen INSERT/UPDATE på bids (migration 20261112120000); denne
+ * route er eneste vej til at afgive tilbud og skriver med service-role efter
+ * eksplicit autorisation.
+ *
+ * Forsvar i dybden: databasen håndhæver selv status='published' og
+ * frist > now() (trigger trg_bids_guard_insert, som også stempler status og
+ * submitted_at) samt ét tilbud pr. tilbudsgiver (unik-indeks
+ * bids_tender_supplier_unique). Vi tjekker det samme eksplicit her, så filer
+ * ALDRIG uploades til et udbud, der ikke modtager tilbud — men det er
+ * databasen, der lukker vinduet mellem tjek og insert.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -85,7 +92,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. Upload med service-role (autorisation er verificeret ovenfor)
-    const storage = getServiceClient().storage.from(BID_DOCUMENTS_BUCKET)
+    const serviceClient = getServiceClient()
+    const storage = serviceClient.storage.from(BID_DOCUMENTS_BUCKET)
     const documentPaths: string[] = []
 
     const cleanup = async () => {
@@ -110,9 +118,11 @@ export async function POST(request: NextRequest) {
       return internal('Upload af filer fejlede. Prøv igen.')
     }
 
-    // 5. Indsæt bid med brugerens klient, så RLS-policyen også håndhæves i DB
-    const submittedAt = new Date().toISOString()
-    const { data: bidData, error: bidError } = await supabase
+    // 5. Indsæt bid med service-role. supplier_id/created_by sættes ALTID til
+    //    den autentificerede bruger her på serveren. status og submitted_at
+    //    udelades bevidst: databasen stempler dem (trigger + defaults), så
+    //    serverens tidsstempel er det eneste, der kan stå på tilbuddet.
+    const { data: bidData, error: bidError } = await serviceClient
       .from('bids')
       .insert({
         tender_id: tenderId,
@@ -121,14 +131,27 @@ export async function POST(request: NextRequest) {
         amount: priceNum,
         currency,
         documents: documentPaths,
-        status: 'submitted',
-        submitted_at: submittedAt,
       } satisfies BidsInsert)
       .select('id, created_at, submitted_at')
       .single()
 
     if (bidError || !bidData) {
       await cleanup()
+
+      // 23505: unik-indeks (tender_id, supplier_id) — samtidig afgivelse slap
+      // forbi tjekket i trin 2.
+      if (bidError?.code === '23505') {
+        return json(
+          { error: 'Du har allerede afgivet tilbud. Træk det tilbage for at afgive et nyt.' },
+          409,
+        )
+      }
+      // 22023: insert-triggeren afviste — fristen udløb (eller udbuddet
+      // lukkede) mellem tjekket i trin 1 og insert.
+      if (bidError?.code === '22023') {
+        return json({ error: 'Tilbudsfristen er udløbet' }, 409)
+      }
+
       console.error('[POST /api/bids] insert fejlede:', bidError?.code, bidError?.message)
       return internal('Kunne ikke afgive tilbud. Prøv igen.')
     }

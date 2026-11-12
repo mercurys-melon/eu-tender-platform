@@ -1,8 +1,9 @@
 -- ============================================================
 -- diagnose-rls.sql — READ-ONLY. Ændrer intet.
 --
--- Kør i Supabase Dashboard → SQL Editor FØR og EFTER migration
--- 20261018120000_pilot_security_hardening.sql.
+-- Kør i Supabase Dashboard → SQL Editor FØR og EFTER sikkerhedsmigrationer
+-- (20261018120000_pilot_security_hardening.sql; nøgle 11-13 hører til
+-- 20261112120000_bids_column_lock.sql).
 -- Returnerer ÉN række med ét JSON-felt ("rapport"), fordi SQL Editor kun
 -- viser resultatet af sidste statement. Kopiér hele feltet og gem det.
 -- ============================================================
@@ -86,6 +87,59 @@ SELECT jsonb_pretty(jsonb_build_object(
   -- 10. Gyldige organisationstyper (til seed-scriptet)
   '10_organisationstyper', (
     SELECT coalesce(jsonb_agg(code), '[]'::jsonb) FROM public.organisation_types
+  ),
+
+  -- 11. bids: klient-skriveprivilegier (alle skal være false efter migration
+  --     20261112120000). has_any_column_privilege dækker både tabel- og
+  --     kolonneniveau; has_table_privilege viser tabelniveau alene.
+  '11_bids_skriveprivilegier', (
+    SELECT jsonb_object_agg(
+      r.rolle || ':' || p.priv,
+      jsonb_build_object(
+        'tabel',   has_table_privilege(r.rolle::name, 'public.bids', p.priv),
+        'kolonne', has_any_column_privilege(r.rolle::name, 'public.bids', p.priv)
+      )
+    )
+    FROM (VALUES ('anon'), ('authenticated')) AS r(rolle)
+    CROSS JOIN (VALUES ('INSERT'), ('UPDATE')) AS p(priv)
+  ),
+
+  -- 12. bids-RPC'er: EXECUTE for klient-roller. Forventet efter migration:
+  --     gammel_metadata:* = false, ny_count:anon = false,
+  --     ny_count:authenticated = true. null = funktionen findes ikke (endnu).
+  '12_bids_rpc_execute', (
+    SELECT jsonb_object_agg(
+      f.navn || ':' || r.rolle,
+      has_function_privilege(r.rolle::name, to_regprocedure(f.signatur)::oid, 'EXECUTE')
+    )
+    FROM (VALUES
+      ('gammel_metadata', 'public.get_bid_metadata_for_tender(uuid)'),
+      ('ny_count',        'public.get_bid_count_for_tender(uuid)')
+    ) AS f(navn, signatur)
+    CROSS JOIN (VALUES ('anon'), ('authenticated')) AS r(rolle)
+  ),
+
+  -- 13. bids: triggere og indeks. Forventet efter migration: triggerne
+  --     trg_bids_guard_insert (BEFORE INSERT), trg_bids_set_updated_at og
+  --     audit_bids — og IKKE update_bids_updated_at; indekset
+  --     bids_tender_supplier_unique (UNIQUE på tender_id, supplier_id).
+  '13_bids_triggere_og_indeks', jsonb_build_object(
+    'triggere', (
+      SELECT coalesce(jsonb_agg(jsonb_build_object(
+        'trigger', t.tgname,
+        'aktiv', t.tgenabled <> 'D',
+        'definition', pg_get_triggerdef(t.oid)
+      ) ORDER BY t.tgname), '[]'::jsonb)
+      FROM pg_trigger t
+      WHERE t.tgrelid = 'public.bids'::regclass AND NOT t.tgisinternal
+    ),
+    'indeks', (
+      SELECT coalesce(jsonb_agg(jsonb_build_object(
+        'indeks', indexname, 'definition', indexdef
+      ) ORDER BY indexname), '[]'::jsonb)
+      FROM pg_indexes
+      WHERE schemaname = 'public' AND tablename = 'bids'
+    )
   )
 
 )) AS rapport;

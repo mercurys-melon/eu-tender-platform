@@ -508,6 +508,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_bid_count_for_tender: {
+        Args: { p_tender_id: string }
+        Returns: number
+      }
       get_bid_metadata_for_tender: {
         Args: { p_tender_id: string }
         Returns: {
