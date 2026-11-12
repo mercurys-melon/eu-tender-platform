@@ -150,6 +150,7 @@ END;
 $$;
 
 DROP TRIGGER IF EXISTS update_bids_updated_at   ON public.bids;
+DROP TRIGGER IF EXISTS trg_bids_updated_at      ON public.bids;
 DROP TRIGGER IF EXISTS trg_bids_set_updated_at  ON public.bids;
 CREATE TRIGGER trg_bids_set_updated_at
   BEFORE UPDATE ON public.bids
