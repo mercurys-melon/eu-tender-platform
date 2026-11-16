@@ -14,9 +14,10 @@ export async function getServerClient() {
     env.supabase.anonKey,
     {
       cookies: {
-        get(name: string) { return cookieStore.get(name)?.value },
-        set() {/* read-only in Server Components */},
-        remove() {/* read-only in Server Components */},
+        getAll() { return cookieStore.getAll() },
+        // Bevidst no-op: read-only i Server Components. Session-refresh sker i middleware.
+        // setAll angives eksplicit (frem for at udelade den), så @supabase/ssr ikke logger advarsler.
+        setAll() {/* read-only in Server Components */},
       },
     }
   )
@@ -30,12 +31,12 @@ export async function getActionClient() {
     env.supabase.anonKey,
     {
       cookies: {
-        get(name: string) { return cookieStore.get(name)?.value },
-        set(name: string, value: string, options: Parameters<typeof cookieStore.set>[2]) {
-          try { cookieStore.set(name, value, options) } catch {}
-        },
-        remove(name: string, options: Parameters<typeof cookieStore.set>[2]) {
-          try { cookieStore.set(name, '', options) } catch {}
+        getAll() { return cookieStore.getAll() },
+        setAll(cookiesToSet) {
+          // Fjernelse kommer som value '' + maxAge 0 i options (tidl. remove()).
+          for (const { name, value, options } of cookiesToSet) {
+            try { cookieStore.set(name, value, options) } catch {}
+          }
         },
       },
     }
