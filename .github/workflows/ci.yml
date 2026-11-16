@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Lint, typecheck og build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Ufarlige dummy-værdier. src/config/env.ts kræver kun de to Supabase-variabler
+    # for at build kan køre; alt andet er valgfrit eller har default.
+    # Ingen rigtige hemmeligheder og ingen GitHub Secrets. ".invalid" er et
+    # reserveret TLD, så build aldrig kan ramme et rigtigt Supabase-projekt.
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://ci-dummy.invalid
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-dummy-anon-key
+      NEXT_TELEMETRY_DISABLED: '1'
+
+    steps:
+      - name: Hent kode
+        uses: actions/checkout@v4
+
+      - name: Opsæt Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Installér afhængigheder
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build

@@ -21,24 +21,18 @@ console.log(`Genererer types fra Supabase project ${PROJECT_ID}...`);
 console.log(`Output: ${outputPath}`);
 if (isDryRun) console.log('Mode: DRY-RUN (skriver til tmp/, ikke src/)');
 
-const result = spawnSync(
-  'npx',
-  [
-    'supabase',
-    'gen',
-    'types',
-    'typescript',
-    '--project-id',
-    PROJECT_ID,
-    '--schema',
-    'public',
-  ],
-  {
-    encoding: 'buffer',
-    shell: true,
-    stdio: ['inherit', 'pipe', 'inherit'],
-  }
-);
+// shell: true er nødvendigt på Windows (npx er npx.cmd; spawn uden shell fejler med EINVAL).
+// Kommandoen sendes som EN streng uden args-array, ellers udløser Node DEP0190
+// (args konkatenes uden escaping). Alle dele er konstanter — ingen brugerinput.
+// --remote=<ref> peger eksplicit på projektet (ikke på det linkede i supabase/.temp),
+// så scriptet er uafhængigt af link-tilstand. Erstatter det forældede --project-id.
+const command = `npx supabase gen types typescript --remote=${PROJECT_ID} --schema public`;
+
+const result = spawnSync(command, {
+  encoding: 'buffer',
+  shell: true,
+  stdio: ['inherit', 'pipe', 'inherit'],
+});
 
 if (result.status !== 0) {
   console.error(`\nFEJL: supabase CLI fejlede med status ${result.status}`);
