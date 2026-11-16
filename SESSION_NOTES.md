@@ -3,7 +3,7 @@
 Denne fil bevares som kontinuitet mellem AI-assisterede arbejdssessioner. Læs den ved start af hver ny session sammen med CLAUDE.md.
 
 **Sidst opdateret:** 16. november 2026
-**Sidst aktive session:** 16. november 2026 (Sprint A2: CI, A5: baseline)
+**Sidst aktive session:** 16. november 2026 (Sprint A2: CI, A5: baseline, A3: npm audit)
 
 ---
 
@@ -50,7 +50,22 @@ Denne fil bevares som kontinuitet mellem AI-assisterede arbejdssessioner. Læs d
 - `supabase db push`, `migration list` og `migration repair` er ikke afprøvet uden Docker i CLI 3.1.0. Nødudgang: `psql --single-transaction -f` plus `repair`.
 - pg_graphql er ikke installeret i produktion, men er det på nye Supabase-projekter.
 - CLAUDE.md, afsnittet om `migrations_old/`, skal opdateres.
-**Status Sprint A:** A1 og A2 lukket. A5 trin 0-6 lukket (baseline bygget og prøvekørt); trin 7-10 (staging, verifikation, historik i produktion) venter på nyt selskab. Mangler A3 (Next-opgradering) og A4 (Sentry). Plan: `claude/PILOTPLAN.md` i claude.ai-projektet.
+**Sprint A3: npm audit på Next 14.2.x:**
+- `next` 14.2.32 → 14.2.35 og `eslint-config-next` 14.2.5 → 14.2.35 (ranges `^14.2.35`). `npm audit fix` uden `--force`: 44 lock-ændringer, ingen major-spring (bl.a. resend 6.38.1, ws 8.23.0, postcss 8.5.33 på topniveau, js-yaml 4.3.2). caniuse-lite opdateret.
+- `next.config.js`: `images.unoptimized: true`, `images.domains` med pladsholder fjernet (next/image bruges ikke i `src`).
+- `npm audit` målt 16. nov.: 28 (1 kritisk, 19 høje, 7 moderate, 1 lav) → 14 (1 kritisk, 11 høje, 1 moderat, 1 lav).
+- Tilbage: `next` (kritisk; lukkes først af 16.4.x), postcss inde i next, zod 3 (kræver zod 4), eslint-kæden og @typescript-eslint 6 (kun udvikling), esbuild via tsx (lav).
+
+**Verificeret (A3):** lint (0 fejl, 2 advarsler), typecheck og build grønne lokalt, også build efter sletning af `.next` (fontene hentes igen uden fejl). `npm ci` i ren kopi ændrer ikke lockfilen.
+
+**Afklaret (A3):** build i Claude Codes rene kopi fejlede i `next/font` (Google Fonts-loader). Det skyldtes netværket i dens miljø, ikke opgraderingen.
+
+**Åbne punkter fra A3:**
+- 🔴 A3b: opgradering direkte til Next 16. Next 14 er ude af support, og 15.x får kun sikkerhedsrettelser til 31. jan. 2027 (nextjs.org/support-policy, slået op 16. nov.). Omfatter React 19, asynkrone `cookies()`/`params` (30 kald i 15 filer plus 11 sider og route handlers), ESLint 9 med flat config og @typescript-eslint 8, @supabase/ssr `getAll`/`setAll`, Node ≥ 20.9, `useFormState` → `useActionState` i 4 auth-sider. Skøn 2-4 dage. Skal ligge før A4 og Sprint B.
+- Den kritiske Next-advisory kræver `sharp` (ikke installeret) eller Windows-hosting; lokal `next dev` på Windows er i princippet omfattet, indtil A3b er gennemført.
+- Ubrugte zod-skemaer i `src/lib/validations/` (`supplierRegistrationSchema`, `supplierProfileSchema`, `supplierSearchSchema`, `tenderFilterSchema`) slettes i A3b. zod 4 er en separat beslutning.
+- Build advarer om, at `@supabase/supabase-js` bruger Node-API'er i Edge Runtime via `src/middleware.ts`. Forsvinder, hvis middleware flyttes til `proxy` i Next 16.
+**Status Sprint A:** A1, A2 og A3 lukket. A5 trin 0-6 lukket (baseline bygget og prøvekørt); trin 7-10 (staging, verifikation, historik i produktion) venter på nyt selskab. Næste: A3b (Next 16), derefter A4 (Sentry). Plan: `claude/PILOTPLAN.md` i claude.ai-projektet.
 
 ---
 

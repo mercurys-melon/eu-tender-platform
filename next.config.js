@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // next/image bruges ikke i src. Billedoptimering slås fra, så /_next/image ikke
+  // behandler eksterne billeder (afbødning af Image Optimizer-advisories i Next 14).
   images: {
-    domains: ['localhost', 'your-supabase-project.supabase.co'],
+    unoptimized: true,
   },
   env: {
     CUSTOM_KEY: process.env.CUSTOM_KEY || "", // fallback til tom string
