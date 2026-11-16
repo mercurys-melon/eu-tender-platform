@@ -18,7 +18,8 @@ type BidRow = Database['public']['Tables']['bids']['Row']
  * tilbud efter fristen. Før fristen vises kun antal via get_bid_count_for_tender
  * (ingen identitet eller tidspunkter).
  */
-export default async function BidsPage({ params }: { params: { id: string } }) {
+export default async function BidsPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
   const user = await getCurrentUser()
   if (!user) redirect(`/login?redirectTo=/tenders/${params.id}/bids`)
 
@@ -26,7 +27,7 @@ export default async function BidsPage({ params }: { params: { id: string } }) {
   if (!tender) notFound()
 
   const deadlinePassed = new Date(tender.submission_deadline).getTime() <= Date.now()
-  const supabase = createClient()
+  const supabase = await createClient()
 
   let bids: BidRow[] = []
   let submittedCount = 0

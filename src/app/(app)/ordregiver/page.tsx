@@ -22,7 +22,7 @@ interface TenderWithStats extends Tender {
  * skjuler tilbuddene for ordregiver indtil fristen.
  */
 async function getBuyerTenders(userId: string): Promise<TenderWithStats[]> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const orgIds = await getMyOrganisationIds()
 
   const ownerFilter =

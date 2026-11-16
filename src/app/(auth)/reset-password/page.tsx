@@ -1,5 +1,6 @@
 'use client'
 
+import { use } from 'react'
 import { useFormState, useFormStatus } from 'react-dom'
 import Link from 'next/link'
 import { requestPasswordReset } from '../actions'
@@ -18,11 +19,9 @@ function SubmitButton() {
   )
 }
 
-export default function ResetPasswordPage({
-  searchParams,
-}: {
-  searchParams?: { sent?: string }
-}) {
+// Next 15+: searchParams er et Promise; klientkomponenter pakker det ud med use().
+export default function ResetPasswordPage(props: { searchParams: Promise<{ sent?: string }> }) {
+  const searchParams = use(props.searchParams)
   const [state, formAction] = useFormState(requestPasswordReset, null)
 
   if (searchParams?.sent === '1') {

@@ -21,10 +21,11 @@ interface Tender {
 }
 
 // Generate dynamic metadata for each tender page
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const params = await props.params
   try {
     // Fetch minimal tender data for metadata
-    const supabase = createClient()
+    const supabase = await createClient()
     const { data: tender } = await supabase
       .from('tenders')
       .select('title, description')
@@ -68,8 +69,9 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   }
 }
 
-export default async function TenderDetailsPage({ params }: { params: { id: string } }) {
-  const supabase = createClient()
+export default async function TenderDetailsPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
+  const supabase = await createClient()
 
   let tender: Tender | null = null
   let evaluationData: {

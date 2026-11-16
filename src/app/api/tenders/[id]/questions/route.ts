@@ -18,12 +18,10 @@ export function OPTIONS() {
   return new NextResponse(null, { status: 200 })
 }
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
     const user = await getCurrentUser()
     
     if (!user) {
@@ -118,10 +116,8 @@ export async function POST(
   }
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
   try {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') || 'published'
@@ -130,7 +126,7 @@ export async function GET(
     // Spørgerens identitet og originaltekst udleveres ALDRIG offentligt
     // (hvem der har vist interesse for et udbud er fortroligt).
     if (status === 'published') {
-      const supabase = createClient()
+      const supabase = await createClient()
       const { data, error } = await supabase
         .from('tender_questions')
         .select('id, question_text_public, answer_text, is_published, created_at, updated_at')

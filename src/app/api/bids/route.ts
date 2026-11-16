@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     const priceNum = Number(price.replace(',', '.'))
     if (!Number.isFinite(priceNum) || priceNum <= 0) return badRequest('Gyldig pris er påkrævet')
 
-    const supabase = createClient()
+    const supabase = await createClient()
 
     // 1. Udbuddet skal være publiceret og fristen ikke udløbet
     const { data: tender, error: tenderError } = await supabase

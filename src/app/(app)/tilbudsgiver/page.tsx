@@ -51,7 +51,7 @@ function bidStatusToSupplierStatus(status: string): SupplierTenderStatus {
 }
 
 async function getMyParticipations(userId: string): Promise<MyParticipation[]> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: bids, error } = await supabase
     .from('bids')
     .select('id, tender_id, status, created_at')
@@ -89,7 +89,7 @@ async function getMyParticipations(userId: string): Promise<MyParticipation[]> {
 }
 
 async function getOpenTenders(participations: MyParticipation[]): Promise<OpenTender[]> {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data: tenders, error } = await supabase
     .from('tenders')

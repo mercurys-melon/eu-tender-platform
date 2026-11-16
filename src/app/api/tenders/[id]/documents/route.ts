@@ -19,8 +19,9 @@ type Row = Database['public']['Tables']['tender_documents']['Row']
  * Signerede URL'er udstedes med service-role og må derfor KUN udstedes efter
  * autorisationen nedenfor.
  */
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  const supabase = getServerClient()
+export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
+  const supabase = await getServerClient()
 
   const { data: tender } = await supabase
     .from('tenders')
@@ -62,14 +63,15 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
  * Kun ejer, og kun mens udbuddet er i kladde. Efter offentliggørelse er
  * ændring af udbudsmateriale en rettelse, der skal annonceres — ikke en sletning.
  */
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Ikke logget ind' }, { status: 401 })
 
   const documentId = new URL(req.url).searchParams.get('id')
   if (!documentId) return NextResponse.json({ error: 'Dokument-id mangler' }, { status: 400 })
 
-  const supabase = getServerClient()
+  const supabase = await getServerClient()
   const { data: tender } = await supabase
     .from('tenders')
     .select('id, status, entity_id, organisation_id')

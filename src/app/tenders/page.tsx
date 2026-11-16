@@ -15,7 +15,7 @@ export const metadata: Metadata = {
  * Kladder vises aldrig (filtreres her OG via tenders-RLS, migration 20261018120000).
  */
 export default async function TendersPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('tenders')
     .select('id, title, description, submission_deadline, status, category, estimated_value, currency')

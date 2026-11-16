@@ -6,8 +6,9 @@ import { env } from '@/config/env'
 
 const isEdge = () => typeof (globalThis as any).EdgeRuntime !== 'undefined'
 
-export function getServerClient() {
-  const cookieStore = cookies()
+// Next 15+: cookies() er asynkron, derfor er klient-fabrikkerne async og skal awaites.
+export async function getServerClient() {
+  const cookieStore = await cookies()
   return createSSRServerClient<Database>(
     env.supabase.url,
     env.supabase.anonKey,
@@ -22,8 +23,8 @@ export function getServerClient() {
 }
 
 // Mutable cookie client for use in Server Actions where cookies() is writable
-export function getActionClient() {
-  const cookieStore = cookies()
+export async function getActionClient() {
+  const cookieStore = await cookies()
   return createSSRServerClient<Database>(
     env.supabase.url,
     env.supabase.anonKey,

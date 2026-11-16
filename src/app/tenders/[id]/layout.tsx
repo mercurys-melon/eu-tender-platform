@@ -6,7 +6,7 @@ import { TenderStatusBadge } from '@/components/tenders/TenderStatusBadge'
 import { TenderTabs } from './TenderTabs'
 
 async function getTender(id: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('tenders')
     .select('id, title, status')
@@ -22,11 +22,12 @@ async function getTender(id: string) {
 
 export default async function TenderLayout({
   children,
-  params,
+  params: paramsPromise,
 }: {
   children: React.ReactNode
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
+  const params = await paramsPromise
   const tender = await getTender(params.id)
 
   if (!tender) {

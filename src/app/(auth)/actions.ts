@@ -68,7 +68,7 @@ export async function login(prevState: ActionState, formData: FormData): Promise
     return { error: parsed.error.errors[0].message }
   }
 
-  const supabase = getActionClient()
+  const supabase = await getActionClient()
   const { data, error } = await supabase.auth.signInWithPassword(parsed.data)
 
   if (error) return { error: mapAuthError(error.message) }
@@ -98,7 +98,7 @@ export async function signup(prevState: ActionState, formData: FormData): Promis
     return { error: parsed.error.errors[0].message }
   }
 
-  const supabase = getActionClient()
+  const supabase = await getActionClient()
   const { error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
@@ -125,7 +125,7 @@ export async function requestPasswordReset(prevState: ActionState, formData: For
     return { error: parsed.error.errors[0].message }
   }
 
-  const supabase = getActionClient()
+  const supabase = await getActionClient()
   const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
     redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/auth/callback?type=recovery`,
   })
@@ -150,7 +150,7 @@ export async function updatePassword(prevState: ActionState, formData: FormData)
     return { error: parsed.error.errors[0].message }
   }
 
-  const supabase = getActionClient()
+  const supabase = await getActionClient()
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password })
 
   if (error) return { error: mapAuthError(error.message) }
@@ -161,7 +161,7 @@ export async function updatePassword(prevState: ActionState, formData: FormData)
 // ── logout ────────────────────────────────────────────────────────────────────
 
 export async function logout() {
-  const supabase = getActionClient()
+  const supabase = await getActionClient()
   await supabase.auth.signOut()
   redirect('/login')
 }
@@ -169,7 +169,7 @@ export async function logout() {
 // ── switchActiveRole ──────────────────────────────────────────────────────────
 
 export async function switchActiveRole() {
-  const supabase = getActionClient()
+  const supabase = await getActionClient()
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')

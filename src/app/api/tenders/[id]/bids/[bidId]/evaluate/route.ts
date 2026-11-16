@@ -25,8 +25,9 @@ const evaluationSchema = z.object({
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string; bidId: string } }
+  props: { params: Promise<{ id: string; bidId: string }> }
 ) {
+  const params = await props.params
   try {
     const user = await getCurrentUser()
     if (!user) {
@@ -36,7 +37,7 @@ export async function PATCH(
     const body = await request.json()
     const validatedData = evaluationSchema.parse(body)
 
-    const supabase = createClient()
+    const supabase = await createClient()
 
     // RPC validerer:
     // - admin/owner role i bid'ets tender's organisation (SQLSTATE 42501 hvis ikke)

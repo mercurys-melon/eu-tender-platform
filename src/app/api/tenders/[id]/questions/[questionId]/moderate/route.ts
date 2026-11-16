@@ -20,8 +20,9 @@ const moderationSchema = z.object({
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string; questionId: string } }
+  props: { params: Promise<{ id: string; questionId: string }> }
 ) {
+  const params = await props.params
   try {
     const user = await getCurrentUser()
     

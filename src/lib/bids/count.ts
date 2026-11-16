@@ -1,6 +1,6 @@
 import type { getServerClient } from '@/lib/supabase/server'
 
-type ServerClient = ReturnType<typeof getServerClient>
+type ServerClient = Awaited<ReturnType<typeof getServerClient>>
 
 /**
  * Antal modtagne tilbud på et udbud, set fra ordregiver.

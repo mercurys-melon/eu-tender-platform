@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login`)
   }
 
-  const supabase = createClient()
+  const supabase = await createClient()
   const { error: exchangeError, data } = await supabase.auth.exchangeCodeForSession(code)
 
   if (exchangeError) {

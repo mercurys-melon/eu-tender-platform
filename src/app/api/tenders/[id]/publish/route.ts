@@ -20,7 +20,8 @@ async function authorize(tenderId: string) {
   return null
 }
 
-export async function POST(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(_request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
   const denied = await authorize(params.id)
   if (denied) return denied
   return NextResponse.json(
@@ -29,7 +30,8 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
   )
 }
 
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
   const denied = await authorize(params.id)
   if (denied) return denied
   return NextResponse.json({ jobs: [] }, { status: 200 })

@@ -24,7 +24,7 @@ export function OPTIONS() {
 export async function POST(request: NextRequest) {
   try {
     // Single client instance for the entire request — avoids multiple cookie reads
-    const supabase = createClient()
+    const supabase = await createClient()
 
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) return unauthorized()

@@ -1,5 +1,6 @@
 'use client'
 
+import { use } from 'react'
 import { useFormState, useFormStatus } from 'react-dom'
 import Link from 'next/link'
 import { login } from '../actions'
@@ -18,11 +19,9 @@ function SubmitButton() {
   )
 }
 
-export default function LoginPage({
-  searchParams,
-}: {
-  searchParams?: { message?: string }
-}) {
+// Next 15+: searchParams er et Promise; klientkomponenter pakker det ud med use().
+export default function LoginPage(props: { searchParams: Promise<{ message?: string }> }) {
+  const searchParams = use(props.searchParams)
   const [state, formAction] = useFormState(login, null)
 
   return (
