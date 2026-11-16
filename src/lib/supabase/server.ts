@@ -6,35 +6,37 @@ import { env } from '@/config/env'
 
 const isEdge = () => typeof (globalThis as any).EdgeRuntime !== 'undefined'
 
-export function getServerClient() {
-  const cookieStore = cookies()
+// Next 15+: cookies() er asynkron, derfor er klient-fabrikkerne async og skal awaites.
+export async function getServerClient() {
+  const cookieStore = await cookies()
   return createSSRServerClient<Database>(
     env.supabase.url,
     env.supabase.anonKey,
     {
       cookies: {
-        get(name: string) { return cookieStore.get(name)?.value },
-        set() {/* read-only in Server Components */},
-        remove() {/* read-only in Server Components */},
+        getAll() { return cookieStore.getAll() },
+        // Bevidst no-op: read-only i Server Components. Session-refresh sker i middleware.
+        // setAll angives eksplicit (frem for at udelade den), så @supabase/ssr ikke logger advarsler.
+        setAll() {/* read-only in Server Components */},
       },
     }
   )
 }
 
 // Mutable cookie client for use in Server Actions where cookies() is writable
-export function getActionClient() {
-  const cookieStore = cookies()
+export async function getActionClient() {
+  const cookieStore = await cookies()
   return createSSRServerClient<Database>(
     env.supabase.url,
     env.supabase.anonKey,
     {
       cookies: {
-        get(name: string) { return cookieStore.get(name)?.value },
-        set(name: string, value: string, options: Parameters<typeof cookieStore.set>[2]) {
-          try { cookieStore.set(name, value, options) } catch {}
-        },
-        remove(name: string, options: Parameters<typeof cookieStore.set>[2]) {
-          try { cookieStore.set(name, '', options) } catch {}
+        getAll() { return cookieStore.getAll() },
+        setAll(cookiesToSet) {
+          // Fjernelse kommer som value '' + maxAge 0 i options (tidl. remove()).
+          for (const { name, value, options } of cookiesToSet) {
+            try { cookieStore.set(name, value, options) } catch {}
+          }
         },
       },
     }

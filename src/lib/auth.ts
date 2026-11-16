@@ -8,7 +8,7 @@ type Profile = Database['public']['Tables']['profiles']['Row']
 
 // React.cache() deduplicates calls within a single request across layouts/components
 export const getUser = cache(async (): Promise<User | null> => {
-  const supabase = getServerClient()
+  const supabase = await getServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   return user
 })
@@ -16,7 +16,7 @@ export const getUser = cache(async (): Promise<User | null> => {
 export const getProfile = cache(async (): Promise<Profile | null> => {
   const user = await getUser()
   if (!user) return null
-  const supabase = getServerClient()
+  const supabase = await getServerClient()
   const { data } = await supabase
     .from('profiles')
     .select('*')

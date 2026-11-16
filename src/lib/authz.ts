@@ -22,7 +22,7 @@ const TENDER_MANAGER_ROLES: MemberRole[] = ['owner', 'admin', 'editor']
 
 /** Verificeret bruger (getUser rammer auth-serveren — getSession gør ikke). */
 export async function getCurrentUser(): Promise<User | null> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase.auth.getUser()
   if (error || !data.user) return null
   return data.user
@@ -30,7 +30,7 @@ export async function getCurrentUser(): Promise<User | null> {
 
 /** Organisations-id'er hvor brugeren er medlem (via SECURITY DEFINER-RPC). */
 export async function getMyOrganisationIds(): Promise<string[]> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase.rpc('get_my_organisation_ids')
   if (error) {
     console.error('[authz] get_my_organisation_ids fejlede:', error.message)
@@ -45,7 +45,7 @@ export async function getMyOrganisationIds(): Promise<string[]> {
  * Returnerer null hvis brugeren ikke er tilknyttet en ordregiver.
  */
 export async function getBuyerOrganisationId(userId: string): Promise<string | null> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('organisation_members')
     .select('organisation_id, role, is_default, accepted_at')
@@ -80,7 +80,7 @@ export async function getManagedTender(
   userId: string,
   tenderId: string,
 ): Promise<TenderRow | null> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: tender, error } = await supabase
     .from('tenders')
     .select('*')

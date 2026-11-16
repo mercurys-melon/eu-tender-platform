@@ -52,19 +52,17 @@ async function refreshSession(req: NextRequest): Promise<{
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return req.cookies.get(name)?.value
+        getAll() {
+          return req.cookies.getAll()
         },
-        set(name: string, value: string, options: Record<string, unknown>) {
-          // Skriv til request (for downstream server components) og response (til browser)
-          req.cookies.set(name, value)
+        setAll(cookiesToSet) {
+          // Skriv til request (for downstream server components) og response (til browser).
+          // Fjernelse kommer som value '' + maxAge 0 i options (tidl. remove()).
+          for (const { name, value } of cookiesToSet) req.cookies.set(name, value)
           response = NextResponse.next({ request: { headers: req.headers } })
-          response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2])
-        },
-        remove(name: string, options: Record<string, unknown>) {
-          req.cookies.set(name, '')
-          response = NextResponse.next({ request: { headers: req.headers } })
-          response.cookies.set(name, '', options as Parameters<typeof response.cookies.set>[2])
+          for (const { name, value, options } of cookiesToSet) {
+            response.cookies.set(name, value, options)
+          }
         },
       },
     }
@@ -89,11 +87,11 @@ async function getRoleForSession(
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return req.cookies.get(name)?.value
+        getAll() {
+          return req.cookies.getAll()
         },
-        set() {},
-        remove() {},
+        // Bevidst no-op: kun rolleopslag; refreshSession har allerede skrevet cookies.
+        setAll() {},
       },
     }
   )
@@ -154,13 +152,22 @@ export async function middleware(req: NextRequest) {
     return response
   }
 
-  // ── 4. (auth)-ruter: redirect til rolle-dashboard hvis allerede logget ind ─
+  // ── 4. /update-password: kræver session (sat af auth-callback efter recovery-link) ─
+  // Uden session kan formularen ikke gemme, så brugeren sendes til /reset-password.
+  if (pathname === '/update-password') {
+    const { session, response } = await refreshSession(req)
+    if (!session) {
+      return NextResponse.redirect(new URL('/reset-password', req.url))
+    }
+    return response
+  }
+
+  // ── 5. (auth)-ruter: redirect til rolle-dashboard hvis allerede logget ind ─
   // Forhindrer authenticated brugere i at se login/signup-sider.
   const AUTH_PATHS = new Set([
     '/login',
     '/signup',
     '/reset-password',
-    '/update-password',
     '/verify-email',
   ])
   if (AUTH_PATHS.has(pathname)) {

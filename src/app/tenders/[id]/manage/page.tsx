@@ -65,9 +65,16 @@ export default function TenderManagePage() {
         const { data: { user: currentUser } } = await supabase().auth.getUser()
         setUser(currentUser)
 
-        // Check if user is owner
+        // Ejerskab: samme regel som isTenderManagedBy i src/lib/authz.ts (legacy entity_id
+        // ELLER medlemskab af udbuddets organisation). authz.ts kan ikke importeres i en
+        // klientkomponent, så reglen gentages her. RLS/API autoriserer fortsat selvstændigt.
         if (currentUser && tenderData) {
-          const ownerCheck = currentUser.id === (tenderData as any).entity_id
+          const { data: orgIds, error: orgError } = await supabase().rpc('get_my_organisation_ids')
+          if (orgError) console.error('get_my_organisation_ids fejlede:', orgError.message)
+          const myOrganisationIds = orgIds ?? []
+          const ownerCheck =
+            currentUser.id === tenderData.entity_id ||
+            (!!tenderData.organisation_id && myOrganisationIds.includes(tenderData.organisation_id))
           setIsOwner(ownerCheck)
           
           if (!ownerCheck) {

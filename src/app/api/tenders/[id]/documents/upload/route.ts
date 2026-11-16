@@ -15,7 +15,8 @@ type TD_Insert = Database['public']['Tables']['tender_documents']['Insert']
  * Ejerskab verificeres FØR storage-upload, fordi uploaden sker med service-role.
  * Kun mens udbuddet er i kladde; senere ændringer er rettelser (fase 2).
  */
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Ikke logget ind' }, { status: 401 })
 

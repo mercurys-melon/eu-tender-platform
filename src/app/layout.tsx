@@ -77,6 +77,9 @@ export default function RootLayout({
     <html
       lang="da"
       className={`${spaceGrotesk.variable} ${poppins.variable} ${inter.variable}`}
+      // Next 16 tilsidesætter ikke længere scroll-behavior: smooth (globals.css) ved
+      // navigation. Attributten bevarer Next 14-adfærden: øjeblikkelig scroll ved ruteskift.
+      data-scroll-behavior="smooth"
       suppressHydrationWarning
     >
       <head>
