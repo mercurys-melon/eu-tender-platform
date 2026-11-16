@@ -82,6 +82,8 @@ jspm_packages/
 
 # Next.js build output
 .next
+# Genereres af next dev/build/typegen og skifter indhold mellem dem (Next 16-anbefaling)
+next-env.d.ts
 
 # Nuxt.js build / generate output
 .nuxt
