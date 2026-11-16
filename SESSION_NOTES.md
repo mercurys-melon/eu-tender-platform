@@ -2,8 +2,55 @@
 
 Denne fil bevares som kontinuitet mellem AI-assisterede arbejdssessioner. Læs den ved start af hver ny session sammen med CLAUDE.md.
 
-**Sidst opdateret:** 12. november 2026
-**Sidst aktive session:** 12. november 2026 (bids skrivelås)
+**Sidst opdateret:** 16. november 2026
+**Sidst aktive session:** 16. november 2026 (Sprint A2: CI, A5: baseline)
+
+---
+
+## 16. november 2026
+
+**Sprint A2: CI (commit `1e54e84`):**
+- `.github/workflows/ci.yml`: kører på pull_request og push til main. Node låst til 24. Trin: `npm ci`, lint, typecheck, build.
+- Build i CI bruger kun to dummy-værdier (`NEXT_PUBLIC_SUPABASE_URL=https://ci-dummy.invalid`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`). Ingen secrets. Alle øvrige env-variabler er valgfrie ved build.
+- `scripts/gen-types.mjs`: `--project-id` erstattet af `--remote=<ref>` med eksplicit projekt-ref; kommandoen bygges som én streng (fjerner DEP0190).
+- `.gitignore`: linjen `public` fjernet, så en fremtidig `public/`-mappe kommer med i git.
+
+**Verificeret:** lint (2 advarsler, 0 fejl), typecheck og build grønne lokalt 16. nov. Første kørsel i GitHub Actions grøn.
+
+**Ikke bekræftet:** om `db:types:dry` gav byte-identisk output før og efter rettelsen i `gen-types.mjs`. Sessionen 12. nov. blev afbrudt før slutrapporten. Kør `npm run db:types:dry` én gang som kontrol.
+
+**Åbne punkter:**
+- To `react-hooks/exhaustive-deps`-advarsler i `PublicationButton.tsx` og `QnAModerationPanel.tsx`.
+- Ingen branch protection på `main` endnu; CI er kun vejledende.
+- Forældede browserdata (`caniuse-lite`, `baseline-browser-mapping`) ryddes op i A3.
+
+**Sprint A5: baseline af produktionsskemaet (`supabase/migrations/20261116120000_baseline_prod.sql`):**
+- Dump taget 16. nov. med pg_dump 18.7 (klientværktøjer i `C:\Program Files\PostgreSQL\18\bin`) via session-pooleren fra produktion (Postgres 17.4). Filer i `scripts/sql/output/baseline/` (git-ignoreret). DB-password nulstillet samme dag.
+- Baseline bygges af `scripts/build-baseline.mjs`. Filen genereres og redigeres ikke i hånden. Scriptet kopierer linjer byte for byte (130 CRLF-linjer i funktionskroppe bevaret) og kontrollerer, at output = input minus fjernede linjer.
+- Fjernet (660 af 2811 linjer): `\restrict`/`\unrestrict`, 4 extensions, publikationen `supabase_realtime`, 6 event triggers, ACL i `extensions` (51) og `vault` (5), default privileges for `supabase_admin`.
+- Tilføjet: vagt der afbryder hvis `public.tenders` findes, én transaktion om hele filen, trigger `on_auth_user_created` på `auth.users`, buckets `tender-docs` og `bid-documents`, tre rækker i `organisation_types`, `RESET ALL`.
+- Filen fjerner først postgres' default privileges i public og genopretter dem til sidst. Uden det ville en frisk Supabase-database give anon/authenticated INSERT/UPDATE på `bids`, fuld SELECT på `tender_questions` og EXECUTE på de to bids-RPC'er.
+- **Må aldrig eksekveres i produktion.** Dér markeres den kun som kørt (`supabase migration repair --status applied 20261116120000`), og først når staging er verificeret.
+- De ti tidligere filer og `migrations_old/` ligger i `supabase/migrations_archive/` (historik, matcher ikke produktion).
+- Nyt `scripts/sql/schema-fingerprint.sql` (read-only): triggere på auth/storage, storage-policies, buckets, extensions, publikationer, default ACLs, ejere i public, event triggers, cron.job.
+- `.gitattributes`: baseline-filen er markeret `-text`, så git ikke normaliserer de blandede linjeskift.
+
+**Verificeret (A5):** scriptets kontrol OK (sha256 `bad86bb3…0a9c86`), typecheck 0 fejl, build grønt. Baseline prøvekørt 16. nov. i en tom PGlite (Postgres 18.6) med stub af Supabases roller og skemaerne auth/storage: kører igennem i én transaktion; 11 tabeller, 32 policies, 16 triggere, RLS på alle; skrivelås på `bids`, kolonnelås på `tender_questions` og EXECUTE-låsene holder; default ACL identisk før og efter; vagten afbryder anden kørsel; `handle_new_user` opretter profil; `diagnose-rls.sql` (0 røde flag, nøgle 11-13 som i produktion) og `schema-fingerprint.sql` kører.
+
+**Ikke verificeret (A5):** kørsel mod en rigtig Supabase-instans på Postgres 17. Det sker i trin 7-9 (staging + dump-diff mod produktion).
+
+**Historik-tabellen i produktion** (`supabase_migrations.schema_migrations`) kender kun de syv første versioner; `20260528092910`, `20261018120000` og `20261112120000` er kørt i SQL Editor og står der ikke.
+
+**Fundet i dumpet, ikke i nogen migration:** funktionerne `set_updated_at()` og `set_bids_updated_at()` (ubrugt); triggerne `trg_tenders_updated_at` og `trg_set_created_by`; indekserne `idx_bids_created_at`, `idx_bids_tender_id`, `idx_tenders_created_at` samt dubletterne `tender_documents_created_by_idx` og `tender_documents_tender_id_idx`; fem policies fra Cursor-perioden uden `TO` på `profiles` og `audit_logs`. Tabellen `leads` findes ikke.
+
+**Åbne punkter fra A5:**
+- 🔴 `bids_status_check` tillader `submitted, under_review, accepted, rejected`, men `update_bid_status()` sætter `under_evaluation, accepted, rejected, winner, not_awarded`: tre af fem statusser afvises af constrainten. `tenders_status_check` tillader `draft, published, closed, awarded`, mens `src/lib/tenders/types.ts` også har `prequalification, bidding, evaluation, cancelled`. Rettes i egen migration som første opgave i Sprint B.
+- `search_path`: `set_bids_updated_at`, `set_created_by`, `set_updated_at` og `update_updated_at_column` har ingen; `handle_new_user` (SECURITY DEFINER) har `public` uden `pg_temp`.
+- Ryd op i dublet-policies på `profiles` og dublet-indekser på `tender_documents`; `audit_logs`-policyen bruger stadig `entity_id`.
+- `supabase db push`, `migration list` og `migration repair` er ikke afprøvet uden Docker i CLI 3.1.0. Nødudgang: `psql --single-transaction -f` plus `repair`.
+- pg_graphql er ikke installeret i produktion, men er det på nye Supabase-projekter.
+- CLAUDE.md, afsnittet om `migrations_old/`, skal opdateres.
+**Status Sprint A:** A1 og A2 lukket. A5 trin 0-6 lukket (baseline bygget og prøvekørt); trin 7-10 (staging, verifikation, historik i produktion) venter på nyt selskab. Mangler A3 (Next-opgradering) og A4 (Sentry). Plan: `claude/PILOTPLAN.md` i claude.ai-projektet.
 
 ---
 

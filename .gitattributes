@@ -1,0 +1,1 @@
+supabase/migrations/*_baseline_prod.sql -text
