@@ -17,6 +17,7 @@ interface Tender {
   title: string
   description: string
   entity_id: string
+  organisation_id?: string | null
   category: string
   estimated_value: number
   currency: string
@@ -78,8 +79,18 @@ export default function TenderDetailsClient({ id, initialTender = null, evaluati
         const { data: { user: currentUser } } = await supabase().auth.getUser()
         setUser(currentUser)
 
+        // Ejerskab: samme regel som isTenderManagedBy i src/lib/authz.ts (legacy entity_id
+        // ELLER medlemskab af udbuddets organisation). authz.ts kan ikke importeres i en
+        // klientkomponent, så reglen gentages her. RLS/API autoriserer fortsat selvstændigt.
         if (currentUser && resolvedTender) {
-          setIsOwner(currentUser.id === resolvedTender.entity_id)
+          const { data: orgIds, error: orgError } = await supabase().rpc('get_my_organisation_ids')
+          if (orgError) console.error('get_my_organisation_ids fejlede:', orgError.message)
+          const myOrganisationIds = orgIds ?? []
+          const tenderOrgId = resolvedTender.organisation_id
+          setIsOwner(
+            currentUser.id === resolvedTender.entity_id ||
+              (!!tenderOrgId && myOrganisationIds.includes(tenderOrgId))
+          )
         }
 
       } catch (err: any) {
