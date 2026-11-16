@@ -152,13 +152,22 @@ export async function middleware(req: NextRequest) {
     return response
   }
 
-  // ── 4. (auth)-ruter: redirect til rolle-dashboard hvis allerede logget ind ─
+  // ── 4. /update-password: kræver session (sat af auth-callback efter recovery-link) ─
+  // Uden session kan formularen ikke gemme, så brugeren sendes til /reset-password.
+  if (pathname === '/update-password') {
+    const { session, response } = await refreshSession(req)
+    if (!session) {
+      return NextResponse.redirect(new URL('/reset-password', req.url))
+    }
+    return response
+  }
+
+  // ── 5. (auth)-ruter: redirect til rolle-dashboard hvis allerede logget ind ─
   // Forhindrer authenticated brugere i at se login/signup-sider.
   const AUTH_PATHS = new Set([
     '/login',
     '/signup',
     '/reset-password',
-    '/update-password',
     '/verify-email',
   ])
   if (AUTH_PATHS.has(pathname)) {

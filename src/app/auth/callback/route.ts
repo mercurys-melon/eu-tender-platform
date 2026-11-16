@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { getActionClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -24,7 +24,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login`)
   }
 
-  const supabase = await createClient()
+  // Route handler: klienten skal kunne skrive session-cookies, ellers tabes sessionen efter kodeudvekslingen.
+  const supabase = await getActionClient()
   const { error: exchangeError, data } = await supabase.auth.exchangeCodeForSession(code)
 
   if (exchangeError) {
